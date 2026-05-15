@@ -115,6 +115,12 @@ export async function bookAppointment(
       return { error: 'Horário não disponível. Escolha outro horário.' }
     }
 
+    // Generate access code
+    const access_code = Array.from(
+      { length: 8 },
+      () => 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'[Math.floor(Math.random() * 32)]
+    ).join('')
+
     // Insert appointment
     const { data: newAppointment, error: insertError } = await supabase
       .from('appointments')
@@ -125,6 +131,7 @@ export async function bookAppointment(
         start_time: input.start_time,
         end_time,
         status: 'scheduled',
+        access_code,
       })
       .select('*, service:services(*)')
       .single()

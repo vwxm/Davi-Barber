@@ -12,7 +12,10 @@ interface DatePickerProps {
 }
 
 export default function DatePicker({ onSelect, loading, selectedDate }: DatePickerProps) {
-  const dates = useMemo(() => getBookingWeekDates(), [])
+  const dates = useMemo(() => {
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
+    return getBookingWeekDates().filter(d => d >= today)
+  }, [])
 
   return (
     <div className="flex gap-2 flex-wrap">
