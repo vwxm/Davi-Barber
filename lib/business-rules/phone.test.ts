@@ -20,8 +20,8 @@ describe('isValidBrazilianPhone', () => {
   it('accepts 11-digit mobile', () => {
     expect(isValidBrazilianPhone('11999999999')).toBe(true)
   })
-  it('accepts 10-digit landline', () => {
-    expect(isValidBrazilianPhone('1133334444')).toBe(true)
+  it('rejects 10-digit landline (mobile only)', () => {
+    expect(isValidBrazilianPhone('1133334444')).toBe(false)
   })
   it('rejects short numbers', () => {
     expect(isValidBrazilianPhone('123')).toBe(false)

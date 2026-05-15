@@ -48,6 +48,9 @@ export async function loginClient(formData: FormData) {
   if (!isValidBrazilianPhone(phone)) {
     return { error: 'Telefone inválido.' }
   }
+  if (password.length < 8) {
+    return { error: 'Senha deve ter pelo menos 8 caracteres.' }
+  }
 
   const supabase = await createClient()
   const email = phoneToEmail(phone)

@@ -14,3 +14,5 @@ tsconfig.tsbuildinfo
 !package.json
 !tsconfig.json
 !next.config.json
+
+.vercel

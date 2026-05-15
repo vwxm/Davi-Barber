@@ -8,5 +8,6 @@ export function phoneToEmail(phone: string): string {
 
 export function isValidBrazilianPhone(phone: string): boolean {
   const digits = normalizePhone(phone)
-  return digits.length >= 10 && digits.length <= 11
+  // DDD (2 digits) + 9 + 8 digits = 11 digits, mobile only
+  return digits.length === 11 && digits[2] === '9'
 }
