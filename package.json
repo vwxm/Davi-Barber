@@ -13,10 +13,12 @@
   "dependencies": {
     "@supabase/ssr": "^0.10.3",
     "@supabase/supabase-js": "^2.105.4",
+    "@tailwindcss/postcss": "^4.3.0",
     "googleapis": "^134.0.0",
     "next": "^16.2.6",
     "react": "^18.3.0",
-    "react-dom": "^18.3.0"
+    "react-dom": "^18.3.0",
+    "tailwindcss": "^4.3.0"
   },
   "devDependencies": {
     "@types/node": "^25.8.0",
@@ -25,6 +27,8 @@
     "@vitejs/plugin-react": "^6.0.2",
     "eslint": "^10.3.0",
     "eslint-config-next": "^16.2.6",
+    "jsdom": "^29.1.1",
+    "tsx": "^4.22.0",
     "typescript": "^6.0.3",
     "vitest": "^4.1.6"
   },
