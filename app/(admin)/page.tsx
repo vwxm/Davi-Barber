@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import type { Appointment } from '@/types'
+import { SyncButton } from '@/components/admin/SyncButton'
 
 function formatPhone(phone: string): string {
   const digits = phone.replace(/\D/g, '')
@@ -123,11 +124,16 @@ export default async function AdminDashboardPage() {
                     {appt.service?.name ?? '—'}
                   </p>
                 </div>
-                <div className="text-right">
+                <div className="text-right flex flex-col items-end gap-1">
                   <p className="text-sm text-white">{appt.client?.name ?? '—'}</p>
                   <p className="text-zinc-500 text-xs">
                     {appt.client?.phone ? formatPhone(appt.client.phone) : '—'}
                   </p>
+                  <SyncButton
+                    appointmentId={appt.id}
+                    syncStatus={appt.sync_status}
+                    googleEventId={appt.google_event_id}
+                  />
                 </div>
               </div>
             ))}
