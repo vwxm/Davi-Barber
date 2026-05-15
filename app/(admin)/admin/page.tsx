@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic'
 import { createClient } from '@/lib/supabase/server'
 import type { Appointment } from '@/types'
 import { SyncButton } from '@/components/admin/SyncButton'
