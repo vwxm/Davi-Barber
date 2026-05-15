@@ -108,7 +108,8 @@ export async function bookAppointment(
       .select('id')
       .eq('date', input.date)
       .eq('status', 'scheduled')
-      .eq('start_time', input.start_time)
+      .lt('start_time', end_time)
+      .gt('end_time', input.start_time)
 
     if (conflicting && conflicting.length > 0) {
       return { error: 'Horário não disponível. Escolha outro horário.' }
