@@ -1,5 +1,6 @@
 'use client'
 
+import { useMemo } from 'react'
 import { getBookingWeekDates } from '@/lib/business-rules/booking-window'
 
 const DAYS_PT = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
@@ -11,7 +12,7 @@ interface DatePickerProps {
 }
 
 export default function DatePicker({ onSelect, loading, selectedDate }: DatePickerProps) {
-  const dates = getBookingWeekDates()
+  const dates = useMemo(() => getBookingWeekDates(), [])
 
   return (
     <div className="flex gap-2 flex-wrap">

@@ -22,23 +22,20 @@ export default function SlotPicker({ slots, onSelect, error }: SlotPickerProps) 
   return (
     <div className="grid grid-cols-3 gap-2">
       {slots.map((slot) => (
-        slot.available ? (
-          <button
-            key={slot.start}
-            onClick={() => onSelect(slot)}
-            className="bg-zinc-800 rounded-lg py-3 text-sm font-medium text-white active:opacity-70"
-          >
-            {slot.start}
-          </button>
-        ) : (
-          <button
-            key={slot.start}
-            disabled
-            className="bg-zinc-900 text-zinc-600 cursor-not-allowed rounded-lg py-3 text-sm font-medium"
-          >
-            {slot.start}
-          </button>
-        )
+        <button
+          key={slot.start}
+          type="button"
+          onClick={() => slot.available ? onSelect(slot) : undefined}
+          disabled={!slot.available}
+          aria-label={slot.available ? `${slot.start}` : `${slot.start} indisponível`}
+          className={`rounded-lg py-3 text-sm font-medium ${
+            slot.available
+              ? 'bg-zinc-800 text-white hover:bg-zinc-700'
+              : 'bg-zinc-900 text-zinc-600 cursor-not-allowed'
+          }`}
+        >
+          {slot.start}
+        </button>
       ))}
     </div>
   )

@@ -69,6 +69,7 @@ export default function BookingSection({ services }: BookingSectionProps) {
     } else if (step === 'slot') {
       setStep('date')
       setSelectedSlot(null)
+      setSlotsError(null)
     } else if (step === 'date') {
       setStep('service')
       setSelectedDate(null)
@@ -127,6 +128,7 @@ export default function BookingSection({ services }: BookingSectionProps) {
     <div className="flex flex-col gap-6">
       {step !== 'service' && (
         <button
+          type="button"
           onClick={handleBack}
           className="text-zinc-400 text-sm flex items-center gap-1 self-start active:opacity-70"
         >

@@ -13,6 +13,7 @@ export default function ServicePicker({ services, onSelect }: ServicePickerProps
       {services.map((service) => (
         <button
           key={service.id}
+          type="button"
           onClick={() => onSelect(service)}
           className="bg-zinc-800 rounded-xl p-4 flex justify-between items-center cursor-pointer active:opacity-70 text-left w-full"
         >
