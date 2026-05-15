@@ -1,0 +1,497 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Proposta Michelle Ribeiro — Atendimento com IA | Kortex</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    @page { size: A4; margin: 0; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      margin: 0;
+      background: #111;
+      font-family: 'Inter', Arial, Helvetica, sans-serif;
+      color: #fff;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ── PAGE SHELL ── */
+    .page {
+      width: 210mm;
+      height: 297mm;
+      background: #000;
+      margin: 0 auto;
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      padding: 44px 52px 0;
+      page-break-after: always;
+    }
+    .page:last-child { page-break-after: auto; }
+
+    /* ── HEADER ── */
+    .top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      color: #737373;
+      letter-spacing: 2.5px;
+      font-size: 9.5px;
+      font-weight: 600;
+      text-transform: uppercase;
+      flex-shrink: 0;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      letter-spacing: 0;
+      color: #fff;
+      text-transform: none;
+      font-size: 15px;
+      font-weight: 800;
+    }
+    .mark {
+      display: flex;
+      align-items: flex-end;
+      gap: 3px;
+      height: 24px;
+    }
+    .mark span { width: 3px; background: #fff; display: block; }
+    .mark span:nth-child(1) { height: 18px; }
+    .mark span:nth-child(2) { height: 14px; }
+    .mark span:nth-child(3) { height: 22px; }
+
+    /* ── PILL ── */
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid #303030;
+      border-radius: 999px;
+      height: 26px;
+      padding: 0 22px;
+      font-size: 10px;
+      font-weight: 500;
+      color: #fff;
+      background: #000;
+      align-self: center;
+      flex-shrink: 0;
+      margin-top: 32px;
+    }
+
+    /* ── DIVIDER ── */
+    .divider {
+      height: 1px;
+      background: #1e1e1e;
+      flex-shrink: 0;
+    }
+
+    /* ── FOOTER ── */
+    .footer {
+      display: flex;
+      justify-content: space-between;
+      color: #737373;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      font-size: 8.5px;
+      font-weight: 600;
+      padding: 14px 0 28px;
+      flex-shrink: 0;
+    }
+
+    /* ── SHARED TEXT ── */
+    .eyebrow {
+      color: #737373;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      font-size: 9.5px;
+      font-weight: 700;
+    }
+    .body-copy {
+      color: #a0a0a0;
+      font-size: 11.5px;
+      line-height: 1.5;
+    }
+    .section-title {
+      font-size: 22px;
+      line-height: 1.18;
+      font-weight: 800;
+      letter-spacing: -.4px;
+    }
+
+    /* ════════════════ PAGE 1 ════════════════ */
+
+    .hero-area {
+      text-align: center;
+      flex-shrink: 0;
+      padding: 46px 48px 0;
+    }
+    .hero-area h1 {
+      font-size: 42px;
+      line-height: 1.12;
+      letter-spacing: -1.6px;
+      font-weight: 800;
+    }
+    .hero-area p {
+      margin-top: 28px;
+      color: #a0a0a0;
+      font-size: 13.5px;
+      line-height: 1.52;
+    }
+
+    .solution-section {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 200px 1fr;
+      column-gap: 26px;
+      padding: 28px 4px 0;
+      align-content: start;
+    }
+    .solution-left .section-title { margin-top: 18px; }
+    .solution-left .body-copy { margin-top: 14px; }
+
+    .items-list { padding-top: 0; }
+    .item {
+      display: grid;
+      grid-template-columns: 30px 1fr;
+      padding-bottom: 11px;
+      margin-bottom: 11px;
+      border-bottom: 1px solid #1e1e1e;
+    }
+    .item:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+    .item .num {
+      color: #737373;
+      font-size: 10px;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+    }
+    .item h3 {
+      font-size: 13px;
+      line-height: 1.2;
+      margin-bottom: 5px;
+      font-weight: 700;
+    }
+    .item p {
+      color: #a0a0a0;
+      font-size: 10.5px;
+      line-height: 1.4;
+    }
+
+    .addons-preview {
+      display: grid;
+      grid-template-columns: 210px 1fr;
+      column-gap: 40px;
+      align-items: center;
+      padding: 20px 4px;
+      flex-shrink: 0;
+    }
+    .addons-preview .section-title { margin-top: 12px; font-size: 19px; }
+
+    /* ════════════════ PAGE 2 ════════════════ */
+
+    .page-intro {
+      flex-shrink: 0;
+      padding: 32px 0 0;
+    }
+    .page-intro h1 {
+      margin-top: 28px;
+      font-size: 36px;
+      line-height: 1.18;
+      letter-spacing: -1.2px;
+      font-weight: 800;
+    }
+    .page-intro p {
+      margin-top: 16px;
+      max-width: 580px;
+      color: #a0a0a0;
+      font-size: 12.8px;
+      line-height: 1.52;
+    }
+
+    .flow-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      padding: 24px 0;
+      flex-shrink: 0;
+    }
+    .flow-card, .card {
+      background: #080808;
+      border: 1px solid #1e1e1e;
+      border-radius: 12px;
+    }
+    .flow-card {
+      padding: 18px 14px;
+    }
+    .flow-card .num {
+      color: #737373;
+      font-size: 10px;
+      font-weight: 700;
+      margin-bottom: 14px;
+    }
+    .flow-card h3 {
+      font-size: 14px;
+      margin-bottom: 10px;
+      font-weight: 700;
+    }
+    .flow-card p {
+      color: #a0a0a0;
+      font-size: 10.2px;
+      line-height: 1.42;
+    }
+
+    .columns {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      column-gap: 48px;
+      padding: 24px 4px 0;
+      align-content: start;
+    }
+    .columns .eyebrow { margin-bottom: 22px; }
+
+    ul { list-style: none; padding: 0; margin: 0; }
+    li {
+      color: #a0a0a0;
+      font-size: 11px;
+      line-height: 1.4;
+      margin-bottom: 11px;
+      position: relative;
+      padding-left: 14px;
+    }
+    li::before {
+      content: '';
+      width: 4px;
+      height: 4px;
+      border-radius: 50%;
+      background: #fff;
+      position: absolute;
+      left: 0;
+      top: 5px;
+    }
+
+    .result-section {
+      flex-shrink: 0;
+      padding: 0 4px 0;
+    }
+    .result-section h3 {
+      font-size: 16px;
+      margin-bottom: 8px;
+      font-weight: 700;
+    }
+    .result-section p {
+      color: #a0a0a0;
+      font-size: 10.5px;
+      line-height: 1.45;
+    }
+
+    /* ════════════════ PAGE 3 ════════════════ */
+
+    .cards-grid {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      padding: 24px 0 0;
+      align-content: start;
+    }
+    .card {
+      padding: 20px 18px 16px;
+    }
+    .card .tag {
+      color: #737373;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      font-size: 8px;
+      font-weight: 700;
+      margin-bottom: 14px;
+    }
+    .card h3 {
+      font-size: 15px;
+      line-height: 1.2;
+      margin-bottom: 10px;
+      font-weight: 700;
+    }
+    .card p {
+      color: #a0a0a0;
+      font-size: 10.2px;
+      line-height: 1.42;
+    }
+
+    .next-step {
+      flex-shrink: 0;
+      display: grid;
+      grid-template-columns: 100px 1fr;
+      gap: 16px;
+      align-items: start;
+      padding: 0 4px;
+    }
+    .next-step h3 {
+      font-size: 16px;
+      font-weight: 700;
+    }
+    .next-step p {
+      color: #a0a0a0;
+      font-size: 11px;
+      line-height: 1.45;
+    }
+
+    /* ── spacer utility ── */
+    .spacer { flex: 1; }
+
+    /* ── PRINT ── */
+    @media print {
+      body { background: #000; }
+      .page { margin: 0; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ════════════════════ PÁGINA 1 ════════════════════ -->
+  <section class="page">
+    <div class="top">
+      <div class="brand">
+        <div class="mark"><span></span><span></span><span></span></div>
+        Kortex
+      </div>
+      <div>Proposta · Maio 2026</div>
+    </div>
+
+    <div class="pill">Michelle Ribeiro × Kortex →</div>
+
+    <div class="hero-area">
+      <h1>Atendimento com IA<br>para escalar agenda,<br>follow-up e operação</h1>
+      <p>Uma camada inteligente para WhatsApp e Instagram: triagem de leads, agendamento, confirmação, reagendamento, FAQ e acompanhamento entre consultas — mantendo o tom humano da marca e reduzindo trabalho manual.</p>
+    </div>
+
+    <div class="divider" style="margin-top: 28px;"></div>
+
+    <div class="solution-section">
+      <div class="solution-left">
+        <div class="eyebrow">Solução principal</div>
+        <h2 class="section-title">IA de atendimento<br>e relacionamento</h2>
+        <p class="body-copy">Foco nas maiores dores indicadas: falta de tempo, agendamentos manuais, mensagens de leads/pacientes e follow-up.</p>
+      </div>
+      <div class="items-list">
+        <div class="item"><div class="num">01</div><div><h3>Triagem automática</h3><p>Entende objetivo, perfil, modalidade e intenção de agendar.</p></div></div>
+        <div class="item"><div class="num">02</div><div><h3>Agenda e remarcação</h3><p>Apoia marcações usando Google Agenda e reduz troca manual.</p></div></div>
+        <div class="item"><div class="num">03</div><div><h3>Confirmação automática</h3><p>Lembra, confirma presença e diminui tarefas repetitivas.</p></div></div>
+        <div class="item"><div class="num">04</div><div><h3>FAQ humanizado</h3><p>Responde dúvidas sobre consulta, programas, envio de plano e funcionamento.</p></div></div>
+        <div class="item"><div class="num">05</div><div><h3>Follow-up entre consultas</h3><p>Acompanha pacientes de programas de 3–4 meses ou anual.</p></div></div>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+    <div class="addons-preview">
+      <div>
+        <div class="eyebrow">Adicionais estratégicos</div>
+        <h2 class="section-title">Site · Captação · Conteúdo<br>CRM</h2>
+      </div>
+      <p class="body-copy">Complementos para transformar a audiência atual em demanda organizada, mensurável e menos dependente do atendimento manual.</p>
+    </div>
+    <div class="divider"></div>
+    <div class="footer"><span>01 / 03</span><span>Continua</span></div>
+  </section>
+
+  <!-- ════════════════════ PÁGINA 2 ════════════════════ -->
+  <section class="page">
+    <div class="top">
+      <div class="brand">
+        <div class="mark"><span></span><span></span><span></span></div>
+        Kortex
+      </div>
+      <div>Atendimento com IA · 02</div>
+    </div>
+
+    <div class="page-intro">
+      <div class="eyebrow">Como funciona</div>
+      <h1>A IA entra antes, durante<br>e depois da consulta.</h1>
+      <p>O objetivo não é substituir a Michelle nem deixar o atendimento robótico. A proposta é criar uma assistente treinada com as regras da clínica para filtrar, organizar e encaminhar cada conversa corretamente.</p>
+    </div>
+
+    <div class="divider" style="margin-top: 28px;"></div>
+
+    <div class="flow-grid">
+      <div class="flow-card"><div class="num">01</div><h3>Captação</h3><p>A lead chega pelo Instagram, WhatsApp ou indicação.</p></div>
+      <div class="flow-card"><div class="num">02</div><h3>Triagem</h3><p>A IA identifica perfil, dor, objetivo e intenção de agendar.</p></div>
+      <div class="flow-card"><div class="num">03</div><h3>Agenda</h3><p>Sugere horários disponíveis e organiza marcação ou reagendamento.</p></div>
+      <div class="flow-card"><div class="num">04</div><h3>Relacionamento</h3><p>Confirma, lembra, faz follow-up e direciona casos que exigem humano.</p></div>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="columns">
+      <div>
+        <div class="eyebrow">O que fica automático</div>
+        <ul>
+          <li>Primeira resposta rápida para leads.</li>
+          <li>Perguntas de qualificação e dúvidas frequentes.</li>
+          <li>Confirmação de consulta e lembretes.</li>
+          <li>Reagendamentos simples e direcionamento.</li>
+          <li>Follow-up padronizado dos programas.</li>
+        </ul>
+      </div>
+      <div>
+        <div class="eyebrow">O que continua humano</div>
+        <ul>
+          <li>Condutas clínicas e decisões nutricionais.</li>
+          <li>Casos sensíveis ou fora do padrão.</li>
+          <li>Negociação específica quando necessário.</li>
+          <li>Atendimento de pacientes que pedem suporte pessoal.</li>
+          <li>Ajustes de tom e conteúdos estratégicos.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+    <div class="result-section" style="padding: 16px 4px 0;">
+      <h3>Resultado esperado: mais organização sem aumentar horas de trabalho.</h3>
+      <p>Primeira camada 24/7, com consistência de resposta e menos dependência de mensagens manuais.</p>
+    </div>
+    <div class="footer"><span>02 / 03</span><span>Kortex · Michelle Ribeiro</span></div>
+  </section>
+
+  <!-- ════════════════════ PÁGINA 3 ════════════════════ -->
+  <section class="page">
+    <div class="top">
+      <div class="brand">
+        <div class="mark"><span></span><span></span><span></span></div>
+        Kortex
+      </div>
+      <div>Adicionais · 03</div>
+    </div>
+
+    <div class="page-intro">
+      <div class="eyebrow">Camada de crescimento</div>
+      <h1>Adicionais para transformar<br>audiência em operação.</h1>
+      <p>Como a Michelle já tem mais de 10 mil seguidores, publica quase todos os dias e atende particular, os adicionais servem para reduzir fricção, aumentar confiança e organizar oportunidades que hoje ficam soltas em conversas.</p>
+    </div>
+
+    <div class="divider" style="margin-top: 28px;"></div>
+
+    <div class="cards-grid">
+      <div class="card"><div class="tag">Por que colocar</div><h3>Site institucional</h3><p>Cria autoridade fora do Instagram, explica especialidades como emagrecimento, lipedema e saúde intestinal, e oferece um destino claro para quem pesquisa antes de agendar.</p></div>
+      <div class="card"><div class="tag">Por que colocar</div><h3>Página de captura</h3><p>Transforma posts, stories e campanhas em uma entrada estruturada de leads, em vez de depender só de DM e WhatsApp.</p></div>
+      <div class="card"><div class="tag">Por que colocar</div><h3>Gerador de carrosséis</h3><p>Aproveita a rotina de postagem e reduz o esforço de produção: a IA gera ideias, roteiros e carrosséis alinhados ao tom da marca.</p></div>
+      <div class="card"><div class="tag">Por que colocar</div><h3>CRM de oportunidades</h3><p>Organiza leads, pacientes, retornos e status de negociação para que nenhuma conversa importante se perca no WhatsApp.</p></div>
+      <div class="card"><div class="tag">Por que colocar</div><h3>Follow-up automático</h3><p>Mantém presença entre consultas, fortalece programas de 3–4 meses ou anuais e cria uma experiência mais premium.</p></div>
+      <div class="card"><div class="tag">Por que colocar</div><h3>Dashboard operacional</h3><p>Mostra origem dos leads, volume de conversas, agendamentos, confirmações e gargalos para decisões mais mensuráveis.</p></div>
+    </div>
+
+    <div class="divider"></div>
+    <div class="next-step" style="padding-top: 16px;">
+      <h3>Próximo passo</h3>
+      <p>Selecionar quais módulos fazem sentido agora. A partir disso, montamos um segundo PDF com escopo fechado, etapas de implantação e condições comerciais.</p>
+    </div>
+    <div class="footer"><span>03 / 03</span><span>Kortex · Michelle Ribeiro</span></div>
+  </section>
+
+</body>
+</html>
