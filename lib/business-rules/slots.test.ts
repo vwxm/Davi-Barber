@@ -8,8 +8,11 @@ describe('timeToMinutes / minutesToTime', () => {
 })
 
 describe('getAvailableSlots', () => {
-  const future = '2099-06-02' // segunda-feira distante
-  const nowISO = '2099-06-01T10:00:00.000Z'
+  // 2099-06-08 is a Monday in UTC (getUTCDay() === 1)
+  const future = '2099-06-08'
+  // 2099-06-07 is a Sunday in UTC (getUTCDay() === 0)
+  const sunday = '2099-06-07'
+  const nowISO = '2099-06-07T10:00:00.000Z'
 
   it('returns slots for a free Monday', () => {
     const slots = getAvailableSlots(future, 30, [], [], nowISO)
@@ -18,7 +21,6 @@ describe('getAvailableSlots', () => {
   })
 
   it('returns empty for Sunday', () => {
-    const sunday = '2099-06-01' // domingo
     expect(getAvailableSlots(sunday, 30, [], [], nowISO)).toHaveLength(0)
   })
 

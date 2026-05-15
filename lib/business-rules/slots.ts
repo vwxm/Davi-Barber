@@ -38,8 +38,8 @@ export function getAvailableSlots(
 ): TimeSlot[] {
   const { start, end, slotMinutes, breaks, closedWeekdays } = BUSINESS_HOURS
 
-  const dateObj = new Date(date)
-  const weekday = dateObj.getDay()
+  // T12:00:00Z ensures the UTC date matches the calendar date in any timezone
+  const weekday = new Date(date + 'T12:00:00Z').getUTCDay()
   if (closedWeekdays.includes(weekday)) return []
 
   const fullDayBlock = blocks.find(b => b.active && b.date === date && b.full_day)
@@ -53,7 +53,11 @@ export function getAvailableSlots(
   const todayStr = now.toLocaleDateString('en-CA', { timeZone: TIMEZONE })
   const isToday = date === todayStr
   const nowMinutes = isToday
-    ? now.getHours() * 60 + now.getMinutes()
+    ? (() => {
+        const t = now.toLocaleTimeString('en-GB', { timeZone: TIMEZONE, hour: '2-digit', minute: '2-digit' })
+        const [h, m] = t.split(':').map(Number)
+        return h * 60 + m
+      })()
     : 0
 
   for (let t = startMin; t + durationMinutes <= endMin; t += slotMinutes) {

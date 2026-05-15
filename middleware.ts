@@ -24,7 +24,7 @@ export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
   // Admin routes: require admin role in app_metadata
-  if (pathname.startsWith('/admin') && !pathname.startsWith('/admin/login')) {
+  if ((pathname === '/admin' || pathname.startsWith('/admin/')) && !pathname.startsWith('/admin/login')) {
     if (!user) {
       return NextResponse.redirect(new URL('/admin/login', request.url))
     }
