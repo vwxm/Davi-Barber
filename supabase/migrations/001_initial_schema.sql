@@ -1,6 +1,3 @@
--- Extensões
-create extension if not exists "uuid-ossp";
-
 -- updated_at trigger function
 create or replace function public.set_updated_at()
 returns trigger language plpgsql as $$
@@ -16,13 +13,16 @@ create table public.clients (
   name        text not null,
   phone       text unique not null,
   is_monthly  boolean not null default false,
-  created_at  timestamptz not null default now()
+  created_at  timestamptz not null default now(),
+  updated_at  timestamptz not null default now()
 );
+create trigger clients_updated_at before update on public.clients
+  for each row execute function public.set_updated_at();
 
 -- services
 create table public.services (
   id               uuid primary key default gen_random_uuid(),
-  name             text not null,
+  name             text not null unique,
   price            numeric(10,2) not null default 0,
   duration_minutes integer not null check (duration_minutes > 0 and duration_minutes % 15 = 0),
   active           boolean not null default true,
@@ -32,7 +32,8 @@ create table public.services (
 create trigger services_updated_at before update on public.services
   for each row execute function public.set_updated_at();
 
--- monthly_clients (referenciado por appointments, então vem antes)
+-- monthly_clients (vem antes de appointments por FK)
+-- unique em client_id = um horário fixo por cliente (intencional)
 create table public.monthly_clients (
   id          uuid primary key default gen_random_uuid(),
   client_id   uuid unique not null references public.clients(id) on delete cascade,
@@ -57,7 +58,7 @@ create table public.appointments (
   end_time          time not null check (end_time > start_time),
   status            text not null default 'scheduled'
                     check (status in ('scheduled','completed','canceled')),
-  access_code       text not null unique,
+  access_code       text not null unique check (length(access_code) >= 6),
   monthly_client_id uuid references public.monthly_clients(id) on delete set null,
   google_event_id   text,
   sync_status       text not null default 'pending'
@@ -69,7 +70,11 @@ create table public.appointments (
 create trigger appointments_updated_at before update on public.appointments
   for each row execute function public.set_updated_at();
 create index appointments_date_idx on public.appointments(date);
-create index appointments_client_idx on public.appointments(client_id);
+create index appointments_client_status_idx on public.appointments(client_id, status);
+-- Previne double-booking (ignora cancelados)
+create unique index appointments_no_overlap
+  on public.appointments (date, start_time)
+  where status != 'canceled';
 
 -- schedule_blocks
 create table public.schedule_blocks (
@@ -81,6 +86,7 @@ create table public.schedule_blocks (
   reason      text,
   active      boolean not null default true,
   created_at  timestamptz not null default now(),
+  updated_at  timestamptz not null default now(),
   constraint valid_partial_block check (
     full_day = true or (
       start_time is not null and
@@ -89,19 +95,25 @@ create table public.schedule_blocks (
     )
   )
 );
+create trigger blocks_updated_at before update on public.schedule_blocks
+  for each row execute function public.set_updated_at();
 create index blocks_date_idx on public.schedule_blocks(date);
 
 -- Trigger: criar client quando usuário se registra no Auth
+-- Usa app_metadata (não editável pelo cliente) para dados sensíveis
 create or replace function public.handle_new_user()
 returns trigger language plpgsql security definer set search_path = public as $$
 begin
   insert into public.clients (id, name, phone)
   values (
     new.id,
-    new.raw_user_meta_data->>'name',
-    new.raw_user_meta_data->>'phone'
-  );
+    coalesce(new.raw_user_meta_data->>'name', ''),
+    coalesce(new.raw_user_meta_data->>'phone', '')
+  )
+  on conflict (id) do nothing;
   return new;
+exception when others then
+  return new; -- nunca bloquear o auth
 end;
 $$;
 
@@ -121,34 +133,37 @@ create policy "client_select_own" on public.clients
   for select using (auth.uid() = id);
 create policy "client_update_own" on public.clients
   for update using (auth.uid() = id);
+-- SEGURANÇA: usa app_metadata (só service role pode escrever, não o cliente)
 create policy "admin_all_clients" on public.clients
-  for all using ((auth.jwt() -> 'user_metadata' ->> 'role') = 'admin');
+  for all using ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
 
 -- services policies (leitura pública)
 create policy "public_read_services" on public.services
   for select using (true);
 create policy "admin_all_services" on public.services
-  for all using ((auth.jwt() -> 'user_metadata' ->> 'role') = 'admin');
+  for all using ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
 
 -- appointments policies
 create policy "client_select_own_appt" on public.appointments
   for select using (client_id = auth.uid());
 create policy "client_insert_own_appt" on public.appointments
   for insert with check (client_id = auth.uid());
+-- Cliente só pode alterar status para 'canceled' (não pode marcar 'completed')
 create policy "client_update_own_appt" on public.appointments
-  for update using (client_id = auth.uid());
+  for update using (client_id = auth.uid())
+  with check (status in ('scheduled', 'canceled'));
 create policy "admin_all_appts" on public.appointments
-  for all using ((auth.jwt() -> 'user_metadata' ->> 'role') = 'admin');
+  for all using ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
 
 -- monthly_clients (só admin)
 create policy "admin_all_monthly" on public.monthly_clients
-  for all using ((auth.jwt() -> 'user_metadata' ->> 'role') = 'admin');
+  for all using ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
 
 -- schedule_blocks (leitura pública, escrita admin)
 create policy "public_read_blocks" on public.schedule_blocks
   for select using (true);
 create policy "admin_all_blocks" on public.schedule_blocks
-  for all using ((auth.jwt() -> 'user_metadata' ->> 'role') = 'admin');
+  for all using ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
 
 -- Seed: serviços iniciais
 insert into public.services (name, price, duration_minutes) values
