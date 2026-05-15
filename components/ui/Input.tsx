@@ -6,7 +6,7 @@ interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
 }
 
 export function Input({ label, error, id, ...props }: InputProps) {
-  const inputId = id ?? label.toLowerCase().replace(/\s/g, '-')
+  const inputId = id ?? label.toLowerCase().replace(/[^a-z0-9]/g, '-')
   return (
     <div className="flex flex-col gap-1">
       <label htmlFor={inputId} className="text-sm font-medium text-zinc-300">

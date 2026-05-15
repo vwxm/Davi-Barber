@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState, useTransition } from 'react'
+import { useState, useTransition } from 'react'
 import { loginClient } from '@/actions/client/auth'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
@@ -9,8 +9,6 @@ import Link from 'next/link'
 export default function LoginPage() {
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
-  const formRef = useRef<HTMLFormElement>(null)
-
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     setError(null)
@@ -27,7 +25,7 @@ export default function LoginPage() {
         <h2 className="text-2xl font-bold">Entrar</h2>
         <p className="text-zinc-400 text-sm mt-1">Digite seu telefone e senha</p>
       </div>
-      <form ref={formRef} onSubmit={handleSubmit} className="flex flex-col gap-4">
+      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         <Input label="Telefone" name="phone" type="tel" placeholder="(11) 99999-9999" required />
         <Input label="Senha" name="password" type="password" placeholder="••••••••" required />
         {error && <p className="text-red-400 text-sm text-center">{error}</p>}
