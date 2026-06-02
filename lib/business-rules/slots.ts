@@ -29,6 +29,13 @@ function rangesOverlap(
          timeToMinutes(end1) > timeToMinutes(start2)
 }
 
+// True when `date` falls within the block's date span. A block with a null
+// date_end covers only its single `date`; a period block covers [date, date_end]
+// inclusive. Lexicographic comparison of 'YYYY-MM-DD' strings is order-correct.
+export function blockCoversDate(block: ScheduleBlock, date: string): boolean {
+  return block.date <= date && (block.date_end ?? block.date) >= date
+}
+
 export function getAvailableSlots(
   date: string,
   durationMinutes: number,
@@ -42,7 +49,7 @@ export function getAvailableSlots(
   const weekday = new Date(date + 'T12:00:00Z').getUTCDay()
   if (closedWeekdays.includes(weekday)) return []
 
-  const fullDayBlock = blocks.find(b => b.active && b.date === date && b.full_day)
+  const fullDayBlock = blocks.find(b => b.active && b.full_day && blockCoversDate(b, date))
   if (fullDayBlock) return []
 
   const startMin = timeToMinutes(start)
@@ -70,8 +77,9 @@ export function getAvailableSlots(
     if (blockedByBreak) continue
 
     const blockedByBlock = blocks.some(b =>
-      b.active && b.date === date && !b.full_day &&
+      b.active && !b.full_day &&
       b.start_time && b.end_time &&
+      blockCoversDate(b, date) &&
       rangesOverlap(slotStart, slotEnd, b.start_time, b.end_time)
     )
     if (blockedByBlock) continue

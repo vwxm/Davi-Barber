@@ -46,10 +46,30 @@ describe('getAvailableSlots', () => {
 
   it('returns empty for full_day block', () => {
     const block: ScheduleBlock = {
-      id: 'b1', date: future, full_day: true,
+      id: 'b1', date: future, date_end: null, full_day: true,
       start_time: null, end_time: null,
       reason: 'Férias', active: true, created_at: '', updated_at: '',
     }
     expect(getAvailableSlots(future, 30, [], [block], nowISO)).toHaveLength(0)
+  })
+
+  it('returns empty when a full_day period block covers the date', () => {
+    // future (2099-06-08) sits inside [2099-06-07, 2099-06-09]
+    const block: ScheduleBlock = {
+      id: 'b2', date: '2099-06-07', date_end: '2099-06-09', full_day: true,
+      start_time: null, end_time: null,
+      reason: 'Férias', active: true, created_at: '', updated_at: '',
+    }
+    expect(getAvailableSlots(future, 30, [], [block], nowISO)).toHaveLength(0)
+  })
+
+  it('ignores a period block that does not cover the date', () => {
+    const block: ScheduleBlock = {
+      id: 'b3', date: '2099-06-09', date_end: '2099-06-11', full_day: true,
+      start_time: null, end_time: null,
+      reason: 'Férias', active: true, created_at: '', updated_at: '',
+    }
+    const slots = getAvailableSlots(future, 30, [], [block], nowISO)
+    expect(slots.length).toBeGreaterThan(0)
   })
 })

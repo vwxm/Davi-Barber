@@ -56,7 +56,8 @@ export interface MonthlyClient {
 
 export interface ScheduleBlock {
   id: string
-  date: string          // 'YYYY-MM-DD'
+  date: string          // 'YYYY-MM-DD' (início do período, ou data única)
+  date_end: string | null // 'YYYY-MM-DD' fim do período (inclusivo); null = data única
   full_day: boolean
   start_time: string | null
   end_time: string | null

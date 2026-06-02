@@ -22,6 +22,7 @@ export default function BookingSection({ services, availableDates }: BookingSect
   const [step, setStep] = useState<Step>('service')
   const [slots, setSlots] = useState<TimeSlot[]>([])
   const [slotsError, setSlotsError] = useState<string | null>(null)
+  const [blockReason, setBlockReason] = useState<string | null>(null)
   const [bookingError, setBookingError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
   const [bookedAppointment, setBookedAppointment] = useState<Appointment | null>(null)
@@ -43,6 +44,7 @@ export default function BookingSection({ services, availableDates }: BookingSect
     if (!selectedService) return
     setSelectedDate(date)
     setSlotsError(null)
+    setBlockReason(null)
     setSelectedSlot(null)
 
     startLoadingSlots(async () => {
@@ -53,6 +55,7 @@ export default function BookingSection({ services, availableDates }: BookingSect
         return
       }
       setSlots(result.slots ?? [])
+      setBlockReason(result.blockReason ?? null)
       setStep('slot')
     })
   }
@@ -173,7 +176,7 @@ export default function BookingSection({ services, availableDates }: BookingSect
               {selectedService?.name} · {selectedDate}
             </p>
           </div>
-          <SlotPicker slots={slots} onSelect={handleSelectSlot} error={slotsError} />
+          <SlotPicker slots={slots} onSelect={handleSelectSlot} error={slotsError} blockReason={blockReason} />
         </div>
       )}
 

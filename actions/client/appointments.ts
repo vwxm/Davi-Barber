@@ -1,7 +1,7 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
-import { getAvailableSlots } from '@/lib/business-rules/slots'
+import { getAvailableSlots, blockCoversDate } from '@/lib/business-rules/slots'
 import { isDateInBookingWindow } from '@/lib/business-rules/booking-window'
 import { syncAppointmentEvent } from '@/lib/google-calendar/sync-appointment'
 import { deleteCalendarEvent } from '@/lib/google-calendar/sync'
@@ -10,7 +10,7 @@ import type { Appointment, TimeSlot, BookingInput, ScheduleBlock } from '@/types
 export async function getAvailableSlotsForDate(
   date: string,
   serviceId: string,
-): Promise<{ slots?: TimeSlot[]; error?: string }> {
+): Promise<{ slots?: TimeSlot[]; error?: string; blockReason?: string }> {
   if (!isDateInBookingWindow(date)) {
     return { error: 'Data fora do período de agendamento.' }
   }
@@ -44,26 +44,37 @@ export async function getAvailableSlotsForDate(
       return { error: 'Erro ao buscar agendamentos.' }
     }
 
-    // Fetch schedule blocks for the date
+    // Fetch active schedule blocks covering the date (single-date or period).
     const { data: blocks, error: blocksError } = await supabase
       .from('schedule_blocks')
       .select('*')
-      .eq('date', date)
       .eq('active', true)
+      .lte('date', date)
+      .or(`date_end.gte.${date},and(date.eq.${date},date_end.is.null)`)
 
     if (blocksError) {
       return { error: 'Erro ao buscar bloqueios.' }
     }
 
+    const blockList = (blocks ?? []) as ScheduleBlock[]
+
     const slots = getAvailableSlots(
       date,
       service.duration_minutes,
       (appointments ?? []) as Appointment[],
-      (blocks ?? []) as ScheduleBlock[],
+      blockList,
       new Date().toISOString(),
     )
 
-    return { slots }
+    // If a full-day block covers this date, surface its reason to the client.
+    const fullDayBlock = blockList.find(
+      (b) => b.full_day && blockCoversDate(b, date),
+    )
+    const blockReason = fullDayBlock
+      ? fullDayBlock.reason ?? 'Não haverá atendimento neste dia.'
+      : undefined
+
+    return { slots, blockReason }
   } catch {
     return { error: 'Erro interno. Tente novamente.' }
   }
