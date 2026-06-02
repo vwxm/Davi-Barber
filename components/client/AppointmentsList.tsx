@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
+import { useRouter } from 'next/navigation'
 import { cancelAppointment } from '@/actions/client/appointments'
 import { AppointmentCard } from '@/components/client/AppointmentCard'
 import type { Appointment } from '@/types'
@@ -12,20 +13,24 @@ interface AppointmentsListProps {
 export function AppointmentsList({ appointments }: AppointmentsListProps) {
   const [cancellingId, setCancellingId] = useState<string | null>(null)
   const [, startTransition] = useTransition()
+  const router = useRouter()
 
   const upcoming = appointments
     .filter((a) => a.status === 'scheduled')
     .sort((a, b) => a.date.localeCompare(b.date))
 
   const history = appointments
-    .filter((a) => a.status !== 'scheduled')
+    .filter((a) => a.status === 'completed')
     .sort((a, b) => b.date.localeCompare(a.date))
+
+
 
   function handleCancel(id: string) {
     setCancellingId(id)
     startTransition(async () => {
       await cancelAppointment(id)
       setCancellingId(null)
+      router.refresh()
     })
   }
 

@@ -1,6 +1,7 @@
 'use server'
 import 'server-only'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { requireAdmin } from '@/lib/supabase/require-admin'
 import {
   createCalendarEvent,
   updateCalendarEvent,
@@ -10,6 +11,9 @@ import {
 export async function syncAppointmentToCalendar(
   appointmentId: string,
 ): Promise<{ error?: string }> {
+  const authError = await requireAdmin()
+  if (authError) return authError
+
   const supabase = createAdminClient()
 
   try {
@@ -82,6 +86,9 @@ export async function syncAppointmentToCalendar(
 export async function unsyncAppointmentFromCalendar(
   appointmentId: string,
 ): Promise<{ error?: string }> {
+  const authError = await requireAdmin()
+  if (authError) return authError
+
   const supabase = createAdminClient()
 
   try {

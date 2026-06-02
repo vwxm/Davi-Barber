@@ -19,7 +19,10 @@ export function getClientBookingWindow(): BookingWindow {
   const saturday = new Date(monday)
   saturday.setDate(monday.getDate() + 5)
 
-  return { start: monday, end: saturday }
+  // start is the later of monday or today — never show/allow past dates
+  const start = today > monday ? today : monday
+
+  return { start, end: saturday }
 }
 
 export function isDateInBookingWindow(dateStr: string): boolean {
@@ -33,8 +36,9 @@ export function getBookingWeekDates(): string[] {
   const dates: string[] = []
   const current = new Date(start)
   while (current <= end) {
-    const dateStr = current.toISOString().split('T')[0]
-    if (new Date(dateStr + 'T00:00:00').getDay() !== 0) { // remove domingo
+    // Use locale string to avoid UTC offset shifting the date
+    const dateStr = current.toLocaleDateString('en-CA', { timeZone: TIMEZONE })
+    if (current.getDay() !== 0) { // remove domingo
       dates.push(dateStr)
     }
     current.setDate(current.getDate() + 1)

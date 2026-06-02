@@ -1,6 +1,7 @@
 'use server'
 
 import { createAdminClient } from '@/lib/supabase/admin'
+import { requireAdmin } from '@/lib/supabase/require-admin'
 import { ScheduleBlock } from '@/types'
 
 export async function createBlock(data: {
@@ -10,6 +11,9 @@ export async function createBlock(data: {
   end_time?: string
   reason?: string
 }): Promise<{ block?: ScheduleBlock; error?: string }> {
+  const authError = await requireAdmin()
+  if (authError) return authError
+
   const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
   if (data.date < today) return { error: 'A data não pode ser no passado.' }
 
@@ -37,6 +41,9 @@ export async function createBlock(data: {
 }
 
 export async function deactivateBlock(id: string): Promise<{ error?: string }> {
+  const authError = await requireAdmin()
+  if (authError) return authError
+
   const supabase = createAdminClient()
   const { error } = await supabase.from('schedule_blocks').update({ active: false }).eq('id', id)
   if (error) return { error: error.message }

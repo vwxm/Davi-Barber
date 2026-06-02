@@ -12,9 +12,10 @@ type Step = 'service' | 'date' | 'slot' | 'confirm'
 
 interface BookingSectionProps {
   services: Service[]
+  availableDates: string[]
 }
 
-export default function BookingSection({ services }: BookingSectionProps) {
+export default function BookingSection({ services, availableDates }: BookingSectionProps) {
   const [selectedService, setSelectedService] = useState<Service | null>(null)
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
   const [selectedSlot, setSelectedSlot] = useState<TimeSlot | null>(null)
@@ -150,6 +151,7 @@ export default function BookingSection({ services }: BookingSectionProps) {
             <p className="text-zinc-400 text-sm">{selectedService?.name}</p>
           </div>
           <DatePicker
+            dates={availableDates}
             onSelect={handleSelectDate}
             loading={loadingSlots}
             selectedDate={selectedDate}

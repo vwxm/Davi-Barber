@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { getAvailableSlots } from '@/lib/business-rules/slots'
 import { isDateInBookingWindow } from '@/lib/business-rules/booking-window'
+import { syncAppointmentToCalendar } from '@/actions/admin/calendar'
 import type { Appointment, TimeSlot, BookingInput, ScheduleBlock } from '@/types'
 
 export async function getAvailableSlotsForDate(
@@ -115,10 +116,10 @@ export async function bookAppointment(
       return { error: 'Horário não disponível. Escolha outro horário.' }
     }
 
-    // Generate access code
+    // Generate cryptographically random access code
     const access_code = Array.from(
-      { length: 8 },
-      () => 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'[Math.floor(Math.random() * 32)]
+      crypto.getRandomValues(new Uint8Array(8)),
+      (b) => 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'[b % 32]
     ).join('')
 
     // Insert appointment
@@ -151,6 +152,9 @@ export async function bookAppointment(
     if (!newAppointment) {
       return { error: 'Erro ao agendar. Tente novamente.' }
     }
+
+    // Fire-and-forget calendar sync — don't block booking on calendar errors
+    syncAppointmentToCalendar(newAppointment.id).catch(() => {})
 
     return { appointment: newAppointment as Appointment }
   } catch {
@@ -207,6 +211,7 @@ export async function getMyAppointments(): Promise<{
       .from('appointments')
       .select('*, service:services(*)')
       .eq('client_id', authData.user.id)
+      .neq('status', 'canceled')
       .order('date', { ascending: false })
 
     if (error) {
