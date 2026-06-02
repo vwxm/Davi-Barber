@@ -87,11 +87,13 @@ export async function deleteCalendarEvent(eventId: string): Promise<{ error?: st
 
     return {}
   } catch (err) {
-    // Swallow 404 — event may already be deleted
-    if ((err as { code?: number }).code === 404) {
+    // Swallow 404 (Not Found) and 410 (Gone) — event is already deleted, so
+    // the desired end state is reached. Makes delete/unsync idempotent.
+    const code = (err as { code?: number }).code
+    if (code === 404 || code === 410) {
       return {}
     }
-    if (err instanceof Error && err.message.includes('404')) {
+    if (err instanceof Error && /404|410|has been deleted/i.test(err.message)) {
       return {}
     }
     return { error: err instanceof Error ? err.message : 'Calendar error' }

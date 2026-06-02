@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { getAvailableSlots } from '@/lib/business-rules/slots'
 import { isDateInBookingWindow } from '@/lib/business-rules/booking-window'
 import { syncAppointmentEvent } from '@/lib/google-calendar/sync-appointment'
+import { deleteCalendarEvent } from '@/lib/google-calendar/sync'
 import type { Appointment, TimeSlot, BookingInput, ScheduleBlock } from '@/types'
 
 export async function getAvailableSlotsForDate(
@@ -181,7 +182,7 @@ export async function cancelAppointment(
       .eq('id', appointmentId)
       .eq('client_id', authData.user.id)
       .eq('status', 'scheduled')
-      .select('id')
+      .select('id, google_event_id')
 
     if (error) {
       return { error: 'Erro ao cancelar agendamento.' }
@@ -189,6 +190,19 @@ export async function cancelAppointment(
 
     if (!data || data.length === 0) {
       return { error: 'Agendamento não encontrado ou já cancelado.' }
+    }
+
+    // Remove the event from Google Calendar. Await so it completes before the
+    // serverless function ends; swallow errors so a calendar failure never
+    // blocks the cancellation (the appointment is already canceled).
+    const googleEventId = data[0].google_event_id
+    if (googleEventId) {
+      await deleteCalendarEvent(googleEventId).catch(() => {})
+      await supabase
+        .from('appointments')
+        .update({ google_event_id: null, sync_status: 'pending', sync_error: null })
+        .eq('id', appointmentId)
+        .eq('client_id', authData.user.id)
     }
 
     return {}
