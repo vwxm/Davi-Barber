@@ -3,7 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { getAvailableSlots } from '@/lib/business-rules/slots'
 import { isDateInBookingWindow } from '@/lib/business-rules/booking-window'
-import { syncAppointmentToCalendar } from '@/actions/admin/calendar'
+import { syncAppointmentEvent } from '@/lib/google-calendar/sync-appointment'
 import type { Appointment, TimeSlot, BookingInput, ScheduleBlock } from '@/types'
 
 export async function getAvailableSlotsForDate(
@@ -153,8 +153,10 @@ export async function bookAppointment(
       return { error: 'Erro ao agendar. Tente novamente.' }
     }
 
-    // Fire-and-forget calendar sync — don't block booking on calendar errors
-    syncAppointmentToCalendar(newAppointment.id).catch(() => {})
+    // Await calendar sync so it completes before the serverless function ends,
+    // but swallow errors so a calendar failure never blocks the booking.
+    // syncAppointmentEvent records its own sync_status/sync_error on the row.
+    await syncAppointmentEvent(newAppointment.id).catch(() => {})
 
     return { appointment: newAppointment as Appointment }
   } catch {

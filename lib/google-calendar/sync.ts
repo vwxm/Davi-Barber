@@ -1,11 +1,14 @@
 import 'server-only'
 import { getCalendarClient } from './client'
 
-// Build ISO datetime for São Paulo timezone
-// date: 'YYYY-MM-DD', time: 'HH:MM'
+// Build ISO datetime for São Paulo timezone.
+// date: 'YYYY-MM-DD'; time may be 'HH:MM' or 'HH:MM:SS' (Postgres `time`
+// columns read back with seconds). Normalize to 'HH:MM:SS'.
 // Returns: '2024-01-15T09:00:00-03:00'
 function toSaoPauloISO(date: string, time: string): string {
-  return `${date}T${time}:00-03:00`
+  const [h = '00', m = '00', s = '00'] = time.split(':')
+  const hhmmss = `${h.padStart(2, '0')}:${m.padStart(2, '0')}:${s.padStart(2, '0')}`
+  return `${date}T${hhmmss}-03:00`
 }
 
 export async function createCalendarEvent(appointment: {
