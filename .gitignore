@@ -16,3 +16,8 @@ tsconfig.tsbuildinfo
 !next.config.json
 
 .vercel
+
+# Playwright
+/test-results/
+/playwright-report/
+/playwright/.cache/
