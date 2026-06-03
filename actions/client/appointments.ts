@@ -229,6 +229,71 @@ export async function cancelAppointment(
   }
 }
 
+export async function rescheduleAppointment(
+  appointmentId: string,
+  newDate: string,
+  newStartTime: string,
+): Promise<{ error?: string }> {
+  try {
+    const supabase = await createClient()
+    const { data: authData } = await supabase.auth.getUser()
+    if (!authData.user) {
+      return { error: 'Você precisa estar logado para remarcar.' }
+    }
+
+    if (!isDateInBookingWindow(newDate)) {
+      return { error: 'Data fora do período de agendamento.' }
+    }
+
+    const { data: appt } = await supabase
+      .from('appointments')
+      .select('id, status, service:services(duration_minutes)')
+      .eq('id', appointmentId)
+      .eq('client_id', authData.user.id)
+      .eq('status', 'scheduled')
+      .single()
+
+    if (!appt) return { error: 'Agendamento não encontrado.' }
+
+    const duration = (appt.service as unknown as { duration_minutes: number } | null)?.duration_minutes
+    if (!duration) return { error: 'Serviço inválido.' }
+
+    const [h, m] = newStartTime.split(':').map(Number)
+    const endTotal = h * 60 + m + duration
+    const end_time = `${String(Math.floor(endTotal / 60)).padStart(2, '0')}:${String(endTotal % 60).padStart(2, '0')}`
+
+    // Slot must be free (ignoring this appointment itself).
+    const { data: conflicting } = await supabase
+      .from('appointments')
+      .select('id')
+      .eq('date', newDate)
+      .eq('status', 'scheduled')
+      .lt('start_time', end_time)
+      .gt('end_time', newStartTime)
+      .neq('id', appointmentId)
+
+    if (conflicting && conflicting.length > 0) {
+      return { error: 'Horário não disponível. Escolha outro horário.' }
+    }
+
+    const { error } = await supabase
+      .from('appointments')
+      .update({ date: newDate, start_time: newStartTime, end_time })
+      .eq('id', appointmentId)
+      .eq('client_id', authData.user.id)
+      .eq('status', 'scheduled')
+
+    if (error) return { error: 'Erro ao remarcar. Tente novamente.' }
+
+    // Keep the calendar event in sync with the new date/time.
+    await syncAppointmentEvent(appointmentId).catch(() => {})
+
+    return {}
+  } catch {
+    return { error: 'Erro ao remarcar. Tente novamente.' }
+  }
+}
+
 export async function getMyAppointments(): Promise<{
   appointments?: Appointment[]
   error?: string

@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { getMyAppointments } from '@/actions/client/appointments'
 import { ensureCurrentWeekMonthlyAppointments } from '@/lib/monthly/ensure'
+import { getBookingWeekDates } from '@/lib/business-rules/booking-window'
 import { AppointmentsList } from '@/components/client/AppointmentsList'
 
 export default async function AgendamentosPage() {
@@ -17,6 +18,7 @@ export default async function AgendamentosPage() {
   await ensureCurrentWeekMonthlyAppointments()
 
   const { appointments, error } = await getMyAppointments()
+  const availableDates = getBookingWeekDates()
 
   return (
     <div className="flex flex-col gap-4">
@@ -25,7 +27,7 @@ export default async function AgendamentosPage() {
       {error ? (
         <p className="text-red-400 text-sm">{error}</p>
       ) : (
-        <AppointmentsList appointments={appointments ?? []} />
+        <AppointmentsList appointments={appointments ?? []} availableDates={availableDates} />
       )}
     </div>
   )

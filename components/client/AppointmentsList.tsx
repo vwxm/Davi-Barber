@@ -8,9 +8,10 @@ import type { Appointment } from '@/types'
 
 interface AppointmentsListProps {
   appointments: Appointment[]
+  availableDates: string[]
 }
 
-export function AppointmentsList({ appointments }: AppointmentsListProps) {
+export function AppointmentsList({ appointments, availableDates }: AppointmentsListProps) {
   const [cancellingId, setCancellingId] = useState<string | null>(null)
   const [, startTransition] = useTransition()
   const router = useRouter()
@@ -53,6 +54,7 @@ export function AppointmentsList({ appointments }: AppointmentsListProps) {
               appointment={appointment}
               onCancel={handleCancel}
               isCancelling={cancellingId === appointment.id}
+              availableDates={availableDates}
             />
           ))}
         </section>
@@ -67,6 +69,7 @@ export function AppointmentsList({ appointments }: AppointmentsListProps) {
               appointment={appointment}
               onCancel={handleCancel}
               isCancelling={cancellingId === appointment.id}
+              availableDates={availableDates}
             />
           ))}
         </section>
