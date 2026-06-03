@@ -7,6 +7,7 @@ import { logoutAdmin } from '@/actions/admin/auth'
 
 const NAV = [
   { href: '/admin', label: 'Dashboard', icon: '📅' },
+  { href: '/admin/agenda', label: 'Agenda da Semana', icon: '🗓️' },
   { href: '/admin/servicos', label: 'Serviços', icon: '✂️' },
   { href: '/admin/bloqueios', label: 'Bloqueios', icon: '🚫' },
   { href: '/admin/mensais', label: 'Clientes Mensais', icon: '⭐' },
