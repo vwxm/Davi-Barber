@@ -4,6 +4,7 @@ import { useState, useTransition } from 'react'
 import { registerClient } from '@/actions/client/auth'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
+import { PhoneInput } from '@/components/ui/PhoneInput'
 import Link from 'next/link'
 
 export default function CadastroPage() {
@@ -28,7 +29,7 @@ export default function CadastroPage() {
       </div>
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         <Input label="Nome" name="name" type="text" placeholder="Seu nome" required />
-        <Input label="Telefone" name="phone" type="tel" placeholder="(11) 99999-9999" required />
+        <PhoneInput required />
         <Input label="Senha" name="password" type="password" placeholder="Mínimo 8 caracteres" required />
         {error && <p className="text-red-400 text-sm text-center">{error}</p>}
         <Button type="submit" loading={isPending}>Criar conta</Button>

@@ -4,6 +4,7 @@ import { useState, useTransition } from 'react'
 import { loginClient } from '@/actions/client/auth'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
+import { PhoneInput } from '@/components/ui/PhoneInput'
 import Link from 'next/link'
 
 export default function LoginPage() {
@@ -26,7 +27,7 @@ export default function LoginPage() {
         <p className="text-zinc-400 text-sm mt-1">Digite seu telefone e senha</p>
       </div>
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-        <Input label="Telefone" name="phone" type="tel" placeholder="(11) 99999-9999" required />
+        <PhoneInput required />
         <Input label="Senha" name="password" type="password" placeholder="••••••••" required />
         {error && <p className="text-red-400 text-sm text-center">{error}</p>}
         <Button type="submit" loading={isPending}>Entrar</Button>

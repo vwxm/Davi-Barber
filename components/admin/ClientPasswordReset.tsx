@@ -4,6 +4,7 @@ import { useState, useTransition } from 'react'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { resetClientPassword } from '@/actions/admin/clients'
+import { formatPhoneInput } from '@/lib/business-rules/phone'
 
 export function ClientPasswordReset() {
   const [phone, setPhone] = useState('')
@@ -42,7 +43,7 @@ export function ClientPasswordReset() {
         type="tel"
         placeholder="(11) 99999-9999"
         value={phone}
-        onChange={(e) => setPhone(e.target.value)}
+        onChange={(e) => setPhone(formatPhoneInput(e.target.value))}
         required
       />
       <Input

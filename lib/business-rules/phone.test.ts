@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { normalizePhone, phoneToEmail, isValidBrazilianPhone } from './phone'
+import { normalizePhone, phoneToEmail, isValidBrazilianPhone, formatPhoneInput } from './phone'
 
 describe('normalizePhone', () => {
   it('strips formatting', () => {
@@ -25,5 +25,19 @@ describe('isValidBrazilianPhone', () => {
   })
   it('rejects short numbers', () => {
     expect(isValidBrazilianPhone('123')).toBe(false)
+  })
+})
+
+describe('formatPhoneInput', () => {
+  it('formats progressively', () => {
+    expect(formatPhoneInput('11')).toBe('(11')
+    expect(formatPhoneInput('1199999')).toBe('(11) 99999')
+    expect(formatPhoneInput('11999998888')).toBe('(11) 99999-8888')
+  })
+  it('strips non-digits and caps at 11 digits', () => {
+    expect(formatPhoneInput('(11) 99999-8888999')).toBe('(11) 99999-8888')
+  })
+  it('returns empty for empty input', () => {
+    expect(formatPhoneInput('')).toBe('')
   })
 })
