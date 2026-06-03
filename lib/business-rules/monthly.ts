@@ -3,7 +3,7 @@ import { TIMEZONE } from './slots'
 // Date math anchored at UTC noon avoids timezone/DST edge cases for whole-day
 // arithmetic on 'YYYY-MM-DD' strings.
 
-function addDays(dateStr: string, n: number): string {
+export function addDays(dateStr: string, n: number): string {
   const d = new Date(dateStr + 'T12:00:00Z')
   d.setUTCDate(d.getUTCDate() + n)
   return d.toISOString().slice(0, 10)

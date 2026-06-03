@@ -1,5 +1,8 @@
 import { TIMEZONE } from './slots'
 
+// How many weeks ahead clients may book (1 = current week only, 2 = current + next).
+export const BOOKING_WEEKS = 2
+
 export interface BookingWindow {
   start: Date
   end: Date
@@ -16,8 +19,9 @@ export function getClientBookingWindow(): BookingWindow {
   const monday = new Date(today)
   monday.setDate(today.getDate() + daysToMonday)
 
+  // Saturday of the last bookable week.
   const saturday = new Date(monday)
-  saturday.setDate(monday.getDate() + 5)
+  saturday.setDate(monday.getDate() + 5 + (BOOKING_WEEKS - 1) * 7)
 
   // start is the later of monday or today — never show/allow past dates
   const start = today > monday ? today : monday

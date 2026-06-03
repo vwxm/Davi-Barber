@@ -2,7 +2,8 @@ import 'server-only'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { syncAppointmentEvent } from '@/lib/google-calendar/sync-appointment'
 import { timeToMinutes, minutesToTime, TIMEZONE } from '@/lib/business-rules/slots'
-import { currentWeekMonday, weekdayDateInCurrentWeek } from '@/lib/business-rules/monthly'
+import { currentWeekMonday, addDays } from '@/lib/business-rules/monthly'
+import { BOOKING_WEEKS } from '@/lib/business-rules/booking-window'
 
 function generateAccessCode(): string {
   return Array.from(
@@ -37,7 +38,7 @@ export async function ensureCurrentWeekMonthlyAppointments(): Promise<{
   try {
     const supabase = createAdminClient()
     const nowISO = new Date().toISOString()
-    const weekMonday = currentWeekMonday(nowISO)
+    const baseMonday = currentWeekMonday(nowISO)
     const today = new Date().toLocaleDateString('en-CA', { timeZone: TIMEZONE })
 
     const { data: monthlyClients } = await supabase
@@ -45,64 +46,69 @@ export async function ensureCurrentWeekMonthlyAppointments(): Promise<{
       .select('id, client_id, service_id, weekday, start_time, active, service:services(duration_minutes)')
       .eq('active', true)
 
-    for (const mc of (monthlyClients ?? []) as unknown as MonthlyRow[]) {
-      const duration = mc.service?.duration_minutes
-      if (!duration) continue
+    // Materialize each bookable week (current + next), one occurrence per
+    // (monthly client, week).
+    for (let w = 0; w < BOOKING_WEEKS; w++) {
+      const weekMonday = addDays(baseMonday, w * 7)
 
-      const date = weekdayDateInCurrentWeek(mc.weekday, nowISO)
-      if (date < today) continue // occurrence for this week already passed
+      for (const mc of (monthlyClients ?? []) as unknown as MonthlyRow[]) {
+        const duration = mc.service?.duration_minutes
+        if (!duration) continue
 
-      // Already materialized this week?
-      const { data: existing } = await supabase
-        .from('appointments')
-        .select('id')
-        .eq('monthly_client_id', mc.id)
-        .eq('week_start', weekMonday)
-        .maybeSingle()
-      if (existing) continue
+        // weekday 1=Mon..6=Sat, 0=Sun -> offset from Monday
+        const offset = mc.weekday === 0 ? 6 : mc.weekday - 1
+        const date = addDays(weekMonday, offset)
+        if (date < today) continue // occurrence already passed
 
-      const start = minutesToTime(timeToMinutes(mc.start_time))
-      const end = minutesToTime(timeToMinutes(mc.start_time) + duration)
+        // Already materialized for this week?
+        const { data: existing } = await supabase
+          .from('appointments')
+          .select('id')
+          .eq('monthly_client_id', mc.id)
+          .eq('week_start', weekMonday)
+          .maybeSingle()
+        if (existing) continue
 
-      // Conflict with an existing scheduled appointment on that date?
-      const { data: sameDay } = await supabase
-        .from('appointments')
-        .select('start_time, end_time')
-        .eq('date', date)
-        .eq('status', 'scheduled')
-      const conflict = (sameDay ?? []).some((a) =>
-        rangesOverlap(start, end, a.start_time, a.end_time),
-      )
-      if (conflict) {
-        conflicts.push(`${date} ${start} (mensalista ${mc.id})`)
-        continue
-      }
+        const start = minutesToTime(timeToMinutes(mc.start_time))
+        const end = minutesToTime(timeToMinutes(mc.start_time) + duration)
 
-      const { data: inserted, error } = await supabase
-        .from('appointments')
-        .insert({
-          client_id: mc.client_id,
-          service_id: mc.service_id,
-          date,
-          start_time: start,
-          end_time: end,
-          status: 'scheduled',
-          access_code: generateAccessCode(),
-          monthly_client_id: mc.id,
-          week_start: weekMonday,
-        })
-        .select('id')
-        .single()
+        // Conflict with an existing scheduled appointment on that date?
+        const { data: sameDay } = await supabase
+          .from('appointments')
+          .select('start_time, end_time')
+          .eq('date', date)
+          .eq('status', 'scheduled')
+        const conflict = (sameDay ?? []).some((a) =>
+          rangesOverlap(start, end, a.start_time, a.end_time),
+        )
+        if (conflict) {
+          conflicts.push(`${date} ${start} (mensalista ${mc.id})`)
+          continue
+        }
 
-      // Unique-violation (race): another request already created it.
-      if (error) {
-        if ((error as { code?: string }).code === '23505') continue
-        continue
-      }
+        const { data: inserted, error } = await supabase
+          .from('appointments')
+          .insert({
+            client_id: mc.client_id,
+            service_id: mc.service_id,
+            date,
+            start_time: start,
+            end_time: end,
+            status: 'scheduled',
+            access_code: generateAccessCode(),
+            monthly_client_id: mc.id,
+            week_start: weekMonday,
+          })
+          .select('id')
+          .single()
 
-      generated++
-      if (inserted) {
-        await syncAppointmentEvent(inserted.id).catch(() => {})
+        // Unique/overlap violation (race or conflict): skip.
+        if (error) continue
+
+        generated++
+        if (inserted) {
+          await syncAppointmentEvent(inserted.id).catch(() => {})
+        }
       }
     }
   } catch {

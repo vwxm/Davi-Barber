@@ -1,25 +1,9 @@
 export const dynamic = 'force-dynamic'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { getBookingWeekDates } from '@/lib/business-rules/booking-window'
 import BookingSection from '@/components/client/BookingSection'
 import type { Service } from '@/types'
-
-function buildAvailableDates(): string[] {
-  const tz = 'America/Sao_Paulo'
-  const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: tz })
-  const today = new Date(todayStr + 'T12:00:00')
-  const dow = today.getDay() // 0=Sun 6=Sat
-  const daysUntilSat = dow === 0 ? 6 : 6 - dow
-  const result: string[] = []
-  for (let i = 0; i <= daysUntilSat; i++) {
-    const d = new Date(today)
-    d.setDate(today.getDate() + i)
-    if (d.getDay() !== 0) { // skip Sunday
-      result.push(d.toLocaleDateString('en-CA', { timeZone: tz }))
-    }
-  }
-  return result
-}
 
 export default async function AgendarPage() {
   const supabase = await createClient()
@@ -35,7 +19,7 @@ export default async function AgendarPage() {
     .eq('active', true)
     .order('name')
 
-  const availableDates = buildAvailableDates()
+  const availableDates = getBookingWeekDates()
 
   return (
     <div className="py-6">
