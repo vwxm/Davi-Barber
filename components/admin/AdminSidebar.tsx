@@ -4,15 +4,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useTransition } from 'react'
 import { logoutAdmin } from '@/actions/admin/auth'
-
-const NAV = [
-  { href: '/admin', label: 'Dashboard', icon: '📅' },
-  { href: '/admin/agenda', label: 'Agenda da Semana', icon: '🗓️' },
-  { href: '/admin/servicos', label: 'Serviços', icon: '✂️' },
-  { href: '/admin/bloqueios', label: 'Bloqueios', icon: '🚫' },
-  { href: '/admin/mensais', label: 'Clientes Mensais', icon: '⭐' },
-  { href: '/admin/clientes', label: 'Clientes', icon: '👥' },
-]
+import { ADMIN_NAV, isNavActive } from '@/components/admin/nav-items'
 
 export function AdminSidebar() {
   const pathname = usePathname()
@@ -34,11 +26,8 @@ export function AdminSidebar() {
 
       {/* Nav */}
       <nav className="flex-1 py-4">
-        {NAV.map((item) => {
-          const isActive =
-            item.href === '/admin'
-              ? pathname === '/admin'
-              : pathname.startsWith(item.href)
+        {ADMIN_NAV.map((item) => {
+          const isActive = isNavActive(item.href, pathname)
 
           return (
             <Link
