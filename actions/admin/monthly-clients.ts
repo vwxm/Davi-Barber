@@ -20,18 +20,36 @@ export async function createMonthlyClient(data: {
   if (!data.start_time) return { error: 'Horário é obrigatório.' }
 
   const supabase = createAdminClient()
-  const { data: monthlyClient, error } = await supabase
+  const selectCols =
+    '*, client:clients(id,name,phone,is_monthly,created_at,updated_at), service:services(id,name,price,duration_minutes,active,created_at,updated_at)'
+
+  // client_id is UNIQUE: a client can hold at most one monthly_clients row.
+  // Look for an existing row (active or deactivated) before inserting.
+  const { data: existing } = await supabase
     .from('monthly_clients')
-    .insert({
-      client_id: data.client_id,
-      service_id: data.service_id,
-      weekday: data.weekday,
-      start_time: data.start_time,
-      notes: data.notes ?? null,
-      active: true,
-    })
-    .select('*, client:clients(id,name,phone,is_monthly,created_at,updated_at), service:services(id,name,price,duration_minutes,active,created_at,updated_at)')
-    .single()
+    .select('id, active')
+    .eq('client_id', data.client_id)
+    .maybeSingle()
+
+  if (existing?.active) {
+    return { error: 'Esse cliente já é mensalista.' }
+  }
+
+  const row = {
+    client_id: data.client_id,
+    service_id: data.service_id,
+    weekday: data.weekday,
+    start_time: data.start_time,
+    notes: data.notes ?? null,
+    active: true,
+  }
+
+  // Reactivate/replace a deactivated row, otherwise insert a new one.
+  const query = existing
+    ? supabase.from('monthly_clients').update(row).eq('id', existing.id)
+    : supabase.from('monthly_clients').insert(row)
+
+  const { data: monthlyClient, error } = await query.select(selectCols).single()
 
   if (error) return { error: error.message }
   return { monthlyClient }
