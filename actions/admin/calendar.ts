@@ -14,6 +14,34 @@ export async function syncAppointmentToCalendar(
   return syncAppointmentEvent(appointmentId)
 }
 
+// Re-run calendar sync for every scheduled appointment currently in error.
+export async function retryFailedSyncs(): Promise<{
+  retried: number
+  errors: number
+  error?: string
+}> {
+  const authError = await requireAdmin()
+  if (authError) return { retried: 0, errors: 0, error: authError.error }
+
+  const supabase = createAdminClient()
+  const { data, error } = await supabase
+    .from('appointments')
+    .select('id')
+    .eq('sync_status', 'error')
+    .eq('status', 'scheduled')
+
+  if (error) return { retried: 0, errors: 0, error: error.message }
+
+  let retried = 0
+  let errors = 0
+  for (const appt of data ?? []) {
+    const result = await syncAppointmentEvent(appt.id)
+    if (result.error) errors++
+    else retried++
+  }
+  return { retried, errors }
+}
+
 export async function unsyncAppointmentFromCalendar(
   appointmentId: string,
 ): Promise<{ error?: string }> {

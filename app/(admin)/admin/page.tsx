@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import type { Appointment } from '@/types'
 import { SyncButton } from '@/components/admin/SyncButton'
 import { AppointmentActions } from '@/components/admin/AppointmentActions'
+import { RetrySyncButton } from '@/components/admin/RetrySyncButton'
 import { ensureCurrentWeekMonthlyAppointments } from '@/lib/monthly/ensure'
 
 function formatPhone(phone: string): string {
@@ -84,6 +85,13 @@ export default async function AdminDashboardPage() {
     .from('clients')
     .select('id', { count: 'exact', head: true })
 
+  // Appointments whose calendar sync failed
+  const { count: syncErrorCount } = await supabase
+    .from('appointments')
+    .select('id', { count: 'exact', head: true })
+    .eq('sync_status', 'error')
+    .eq('status', 'scheduled')
+
   return (
     <div className="max-w-3xl mx-auto">
       {/* Greeting */}
@@ -106,6 +114,13 @@ export default async function AdminDashboardPage() {
           <p className="text-zinc-400 text-sm mt-1">Clientes</p>
         </div>
       </div>
+
+      {/* Calendar sync failures */}
+      {(syncErrorCount ?? 0) > 0 && (
+        <div className="mb-6">
+          <RetrySyncButton count={syncErrorCount ?? 0} />
+        </div>
+      )}
 
       {/* Today's appointments */}
       <div>
