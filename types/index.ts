@@ -1,4 +1,4 @@
-export type AppointmentStatus = 'scheduled' | 'completed' | 'canceled'
+export type AppointmentStatus = 'scheduled' | 'completed' | 'canceled' | 'no_show'
 export type SyncStatus = 'pending' | 'synced' | 'error'
 
 export interface Client {

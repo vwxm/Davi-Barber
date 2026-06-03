@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic'
 import { createClient } from '@/lib/supabase/server'
 import { ensureCurrentWeekMonthlyAppointments } from '@/lib/monthly/ensure'
 import { currentWeekMonday } from '@/lib/business-rules/monthly'
-import { CompleteButton } from '@/components/admin/CompleteButton'
+import { AppointmentActions } from '@/components/admin/AppointmentActions'
 import type { Appointment, AppointmentStatus } from '@/types'
 
 const WEEKDAY_LABELS = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado']
@@ -11,6 +11,7 @@ const statusBadge: Record<AppointmentStatus, { label: string; className: string 
   scheduled: { label: 'Agendado', className: 'bg-amber-500/20 text-amber-400' },
   completed: { label: 'Concluído', className: 'bg-green-500/20 text-green-400' },
   canceled: { label: 'Cancelado', className: 'bg-red-500/20 text-red-400' },
+  no_show: { label: 'Não compareceu', className: 'bg-zinc-600/40 text-zinc-300' },
 }
 
 function addDays(dateStr: string, n: number): string {
@@ -38,7 +39,6 @@ export default async function AgendaPage() {
   const nowISO = new Date().toISOString()
   const monday = currentWeekMonday(nowISO)
   const saturday = addDays(monday, 5)
-  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
 
   const { data } = await supabase
     .from('appointments')
@@ -88,8 +88,8 @@ export default async function AgendaPage() {
                       <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${statusBadge[appt.status].className}`}>
                         {statusBadge[appt.status].label}
                       </span>
-                      {appt.status === 'scheduled' && appt.date <= today && (
-                        <CompleteButton appointmentId={appt.id} />
+                      {appt.status === 'scheduled' && (
+                        <AppointmentActions appointmentId={appt.id} />
                       )}
                     </div>
                   </div>

@@ -16,6 +16,7 @@ const statusConfig: Record<AppointmentStatus, { label: string; className: string
   scheduled: { label: 'Agendado', className: 'bg-amber-500/20 text-amber-400' },
   completed: { label: 'Concluído', className: 'bg-green-500/20 text-green-400' },
   canceled: { label: 'Cancelado', className: 'bg-red-500/20 text-red-400' },
+  no_show: { label: 'Não compareceu', className: 'bg-zinc-600/40 text-zinc-300' },
 }
 
 function formatDate(dateStr: string): string {
