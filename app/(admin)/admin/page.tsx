@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic'
 import { createClient } from '@/lib/supabase/server'
 import type { Appointment } from '@/types'
 import { SyncButton } from '@/components/admin/SyncButton'
+import { CompleteButton } from '@/components/admin/CompleteButton'
 
 function formatPhone(phone: string): string {
   const digits = phone.replace(/\D/g, '')
@@ -135,6 +136,7 @@ export default async function AdminDashboardPage() {
                     syncStatus={appt.sync_status}
                     googleEventId={appt.google_event_id}
                   />
+                  <CompleteButton appointmentId={appt.id} />
                 </div>
               </div>
             ))}
