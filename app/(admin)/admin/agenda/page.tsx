@@ -83,6 +83,7 @@ export default async function AgendaPage() {
                         {appt.client?.name ?? '—'}
                         {appt.client?.phone ? ` · ${formatPhone(appt.client.phone)}` : ''}
                       </p>
+                      <p className="text-zinc-500 text-xs font-mono">cód. {appt.access_code}</p>
                     </div>
                     <div className="flex flex-col items-end gap-1">
                       <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${statusBadge[appt.status].className}`}>
