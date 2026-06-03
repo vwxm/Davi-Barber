@@ -10,6 +10,7 @@ const NAV = [
   { href: '/admin/servicos', label: 'Serviços', icon: '✂️' },
   { href: '/admin/bloqueios', label: 'Bloqueios', icon: '🚫' },
   { href: '/admin/mensais', label: 'Clientes Mensais', icon: '⭐' },
+  { href: '/admin/clientes', label: 'Clientes', icon: '👥' },
 ]
 
 export function AdminSidebar() {
