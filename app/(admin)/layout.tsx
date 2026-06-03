@@ -1,3 +1,4 @@
+import { redirect } from 'next/navigation'
 import { AdminSidebar } from '@/components/admin/AdminSidebar'
 import { AdminTopBar } from '@/components/admin/AdminTopBar'
 import { createClient } from '@/lib/supabase/server'
@@ -9,6 +10,12 @@ export default async function AdminLayout({
 }) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
+
+  // Defense-in-depth: even if middleware is bypassed, never render the admin
+  // shell for a non-admin.
+  if (!user || user.app_metadata?.role !== 'admin') {
+    redirect('/admin/login')
+  }
 
   const userName =
     (user?.user_metadata?.name as string | undefined) ??
