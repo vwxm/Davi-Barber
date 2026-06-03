@@ -2,6 +2,8 @@
 
 import { createAdminClient } from '@/lib/supabase/admin'
 import { requireAdmin } from '@/lib/supabase/require-admin'
+import { ensureCurrentWeekMonthlyAppointments } from '@/lib/monthly/ensure'
+import { deleteCalendarEvent } from '@/lib/google-calendar/sync'
 import { MonthlyClient } from '@/types'
 
 export async function createMonthlyClient(data: {
@@ -17,6 +19,7 @@ export async function createMonthlyClient(data: {
   if (!data.client_id) return { error: 'Cliente é obrigatório.' }
   if (!data.service_id) return { error: 'Serviço é obrigatório.' }
   if (data.weekday < 0 || data.weekday > 6) return { error: 'Dia da semana inválido.' }
+  if (data.weekday === 0) return { error: 'Domingo não tem atendimento.' }
   if (!data.start_time) return { error: 'Horário é obrigatório.' }
 
   const supabase = createAdminClient()
@@ -52,6 +55,10 @@ export async function createMonthlyClient(data: {
   const { data: monthlyClient, error } = await query.select(selectCols).single()
 
   if (error) return { error: error.message }
+
+  // Materialize this week's occurrence right away so it shows up immediately.
+  await ensureCurrentWeekMonthlyAppointments()
+
   return { monthlyClient }
 }
 
@@ -60,6 +67,26 @@ export async function deactivateMonthlyClient(id: string): Promise<{ error?: str
   if (authError) return authError
 
   const supabase = createAdminClient()
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
+
+  // Remove this client's future generated appointments (and their calendar
+  // events) so nothing lingers after they stop being a monthly client.
+  const { data: future } = await supabase
+    .from('appointments')
+    .select('id, google_event_id')
+    .eq('monthly_client_id', id)
+    .eq('status', 'scheduled')
+    .gte('date', today)
+
+  for (const appt of future ?? []) {
+    if (appt.google_event_id) {
+      await deleteCalendarEvent(appt.google_event_id).catch(() => {})
+    }
+  }
+  if (future && future.length > 0) {
+    await supabase.from('appointments').delete().in('id', future.map((a) => a.id))
+  }
+
   const { error } = await supabase.from('monthly_clients').update({ active: false }).eq('id', id)
   if (error) return { error: error.message }
   return {}

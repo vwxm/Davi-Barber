@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { getAvailableSlots, blockCoversDate } from '@/lib/business-rules/slots'
+import { ensureCurrentWeekMonthlyAppointments } from '@/lib/monthly/ensure'
 import { isDateInBookingWindow } from '@/lib/business-rules/booking-window'
 import { syncAppointmentEvent } from '@/lib/google-calendar/sync-appointment'
 import { deleteCalendarEvent } from '@/lib/google-calendar/sync'
@@ -14,6 +15,10 @@ export async function getAvailableSlotsForDate(
   if (!isDateInBookingWindow(date)) {
     return { error: 'Data fora do período de agendamento.' }
   }
+
+  // Make sure this week's monthly-client appointments exist so their slots are
+  // blocked before anyone can book over them.
+  await ensureCurrentWeekMonthlyAppointments()
 
   try {
     const supabase = await createClient()
@@ -90,6 +95,8 @@ export async function bookAppointment(
     if (!authData.user) {
       return { error: 'Você precisa estar logado para agendar.' }
     }
+
+    await ensureCurrentWeekMonthlyAppointments()
 
     if (!isDateInBookingWindow(input.date)) {
       return { error: 'Data fora do período de agendamento.' }

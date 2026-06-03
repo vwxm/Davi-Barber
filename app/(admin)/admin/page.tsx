@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import type { Appointment } from '@/types'
 import { SyncButton } from '@/components/admin/SyncButton'
 import { CompleteButton } from '@/components/admin/CompleteButton'
+import { ensureCurrentWeekMonthlyAppointments } from '@/lib/monthly/ensure'
 
 function formatPhone(phone: string): string {
   const digits = phone.replace(/\D/g, '')
@@ -41,6 +42,7 @@ function getWeekRangeBR(): { start: string; end: string } {
 }
 
 export default async function AdminDashboardPage() {
+  await ensureCurrentWeekMonthlyAppointments()
   const supabase = await createClient()
 
   const { data: { user } } = await supabase.auth.getUser()

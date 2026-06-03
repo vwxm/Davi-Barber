@@ -29,7 +29,7 @@ describe('getAvailableSlots', () => {
       id: '1', client_id: 'c1', service_id: 's1',
       date: future, start_time: '09:00', end_time: '09:30',
       status: 'scheduled', access_code: 'ABC123',
-      monthly_client_id: null, google_event_id: null,
+      monthly_client_id: null, week_start: null, google_event_id: null,
       sync_status: 'pending', sync_error: null,
       created_at: '', updated_at: '',
     }

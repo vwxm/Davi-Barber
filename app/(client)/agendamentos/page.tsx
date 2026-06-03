@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { getMyAppointments } from '@/actions/client/appointments'
+import { ensureCurrentWeekMonthlyAppointments } from '@/lib/monthly/ensure'
 import { AppointmentsList } from '@/components/client/AppointmentsList'
 
 export default async function AgendamentosPage() {
@@ -11,6 +12,9 @@ export default async function AgendamentosPage() {
   if (!authData.user) {
     redirect('/login')
   }
+
+  // Self-heal: ensure this week's monthly occurrence exists so the client sees it.
+  await ensureCurrentWeekMonthlyAppointments()
 
   const { appointments, error } = await getMyAppointments()
 

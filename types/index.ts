@@ -30,6 +30,7 @@ export interface Appointment {
   status: AppointmentStatus
   access_code: string
   monthly_client_id: string | null
+  week_start: string | null   // 'YYYY-MM-DD' segunda da semana (linhas de mensalista)
   google_event_id: string | null
   sync_status: SyncStatus
   sync_error: string | null
