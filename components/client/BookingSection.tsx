@@ -10,6 +10,14 @@ import { Button } from '@/components/ui/Button'
 
 type Step = 'service' | 'date' | 'slot' | 'confirm'
 
+const WEEKDAYS_PT = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado']
+
+function formatDateBR(date: string): string {
+  const [y, m, d] = date.split('-')
+  const weekday = WEEKDAYS_PT[new Date(date + 'T12:00:00Z').getUTCDay()]
+  return `${weekday}, ${d}/${m}/${y}`
+}
+
 interface BookingSectionProps {
   services: Service[]
   availableDates: string[]
@@ -121,7 +129,7 @@ export default function BookingSection({ services, availableDates }: BookingSect
           <p className="text-white font-medium">{selectedService?.name}</p>
           <p className="text-zinc-400 text-xs mt-1">Data e horário</p>
           <p className="text-white font-medium">
-            {selectedDate} às {selectedSlot?.start}
+            {selectedDate && formatDateBR(selectedDate)} às {selectedSlot?.start}
           </p>
         </div>
       </div>
@@ -190,7 +198,7 @@ export default function BookingSection({ services, availableDates }: BookingSect
             </div>
             <div className="flex justify-between">
               <span className="text-zinc-400 text-sm">Data</span>
-              <span className="text-white text-sm font-medium">{selectedDate}</span>
+              <span className="text-white text-sm font-medium">{formatDateBR(selectedDate)}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-zinc-400 text-sm">Horário</span>
