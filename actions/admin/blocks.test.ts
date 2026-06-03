@@ -4,9 +4,21 @@ vi.mock('server-only', () => ({}))
 
 const requireAdmin = vi.fn(async () => null as { error: string } | null)
 vi.mock('@/lib/supabase/require-admin', () => ({ requireAdmin: () => requireAdmin() }))
-vi.mock('@/lib/supabase/admin', () => ({ createAdminClient: vi.fn() }))
+
+const createAdminClient = vi.fn()
+vi.mock('@/lib/supabase/admin', () => ({ createAdminClient: () => createAdminClient() }))
 
 import { createBlock } from './blocks'
+
+// Chainable stub whose terminal `single` resolves to the result.
+function makeChain(result: { data: unknown; error: unknown }) {
+  const chain: Record<string, unknown> = {}
+  for (const m of ['from', 'insert', 'select']) {
+    chain[m] = vi.fn(() => chain)
+  }
+  chain.single = vi.fn(() => Promise.resolve(result))
+  return chain
+}
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -40,5 +52,13 @@ describe('createBlock validation', () => {
       date: '2999-01-01', full_day: false, start_time: '14:00', end_time: '13:00',
     })
     expect(result.error).toBe('Horário de fim deve ser após o horário de início.')
+  })
+
+  it('creates a valid full-day block', async () => {
+    const block = { id: 'b1', date: '2999-01-01', full_day: true }
+    createAdminClient.mockReturnValue(makeChain({ data: block, error: null }))
+    const result = await createBlock({ date: '2999-01-01', full_day: true })
+    expect(result.block).toEqual(block)
+    expect(result.error).toBeUndefined()
   })
 })
