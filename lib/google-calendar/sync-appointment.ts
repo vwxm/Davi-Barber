@@ -47,7 +47,11 @@ export async function syncAppointmentEvent(
         end_time: appointment.end_time,
         access_code: appointment.access_code,
         service: appointment.service as { name: string } | null,
-        client: appointment.client as { name: string; phone: string } | null,
+        // Fall back to guest details for admin-booked walk-ins.
+        client: (appointment.client as { name: string; phone: string } | null)
+          ?? (appointment.guest_name
+            ? { name: appointment.guest_name as string, phone: (appointment.guest_phone as string) ?? '' }
+            : null),
       })
       if (result.error) {
         syncError = result.error

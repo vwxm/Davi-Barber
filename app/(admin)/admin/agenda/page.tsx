@@ -3,7 +3,8 @@ import { createClient } from '@/lib/supabase/server'
 import { ensureCurrentWeekMonthlyAppointments } from '@/lib/monthly/ensure'
 import { currentWeekMonday } from '@/lib/business-rules/monthly'
 import { AppointmentActions } from '@/components/admin/AppointmentActions'
-import type { Appointment, AppointmentStatus } from '@/types'
+import { NewAppointmentForm } from '@/components/admin/NewAppointmentForm'
+import type { Appointment, AppointmentStatus, Service } from '@/types'
 
 const WEEKDAY_LABELS = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado']
 
@@ -40,16 +41,20 @@ export default async function AgendaPage() {
   const monday = currentWeekMonday(nowISO)
   const saturday = addDays(monday, 5)
 
-  const { data } = await supabase
-    .from('appointments')
-    .select('*, service:services(id,name), client:clients(id,name,phone)')
-    .gte('date', monday)
-    .lte('date', saturday)
-    .neq('status', 'canceled')
-    .order('date', { ascending: true })
-    .order('start_time', { ascending: true })
+  const [{ data }, { data: servicesData }] = await Promise.all([
+    supabase
+      .from('appointments')
+      .select('*, service:services(id,name), client:clients(id,name,phone)')
+      .gte('date', monday)
+      .lte('date', saturday)
+      .neq('status', 'canceled')
+      .order('date', { ascending: true })
+      .order('start_time', { ascending: true }),
+    supabase.from('services').select('id,name,price,duration_minutes,active,created_at,updated_at').eq('active', true).order('name'),
+  ])
 
   const appointments = (data ?? []) as Appointment[]
+  const services = (servicesData ?? []) as Service[]
 
   // Mon..Sat
   const days = Array.from({ length: 6 }, (_, i) => addDays(monday, i))
@@ -57,6 +62,8 @@ export default async function AgendaPage() {
   return (
     <div className="max-w-3xl mx-auto p-4 space-y-6">
       <h1 className="text-2xl font-bold text-white">Agenda da Semana</h1>
+
+      <NewAppointmentForm services={services} />
 
       {days.map((date) => {
         const weekday = new Date(date + 'T12:00:00Z').getUTCDay()
@@ -78,10 +85,13 @@ export default async function AgendaPage() {
                         {appt.monthly_client_id && (
                           <span className="ml-2 text-amber-400 text-xs">mensalista</span>
                         )}
+                        {!appt.client_id && appt.guest_name && (
+                          <span className="ml-2 text-sky-400 text-xs">avulso</span>
+                        )}
                       </p>
                       <p className="text-zinc-400 text-sm truncate">
-                        {appt.client?.name ?? '—'}
-                        {appt.client?.phone ? ` · ${formatPhone(appt.client.phone)}` : ''}
+                        {appt.client?.name ?? appt.guest_name ?? '—'}
+                        {(() => { const ph = appt.client?.phone ?? appt.guest_phone; return ph ? ` · ${formatPhone(ph)}` : '' })()}
                       </p>
                       <p className="text-zinc-500 text-xs font-mono">cód. {appt.access_code}</p>
                     </div>

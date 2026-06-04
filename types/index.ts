@@ -22,8 +22,10 @@ export interface Service {
 
 export interface Appointment {
   id: string
-  client_id: string
+  client_id: string | null
   service_id: string
+  guest_name?: string | null
+  guest_phone?: string | null
   date: string          // 'YYYY-MM-DD'
   start_time: string    // 'HH:MM'
   end_time: string      // 'HH:MM'

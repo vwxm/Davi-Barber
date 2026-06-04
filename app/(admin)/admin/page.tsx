@@ -138,15 +138,18 @@ export default async function AdminDashboardPage() {
                 className="bg-zinc-800 rounded-xl p-4 flex items-center justify-between"
               >
                 <div>
-                  <p className="font-medium text-white">{appt.start_time}</p>
+                  <p className="font-medium text-white">{appt.start_time.slice(0, 5)}</p>
                   <p className="text-zinc-400 text-sm">
                     {appt.service?.name ?? '—'}
+                    {!appt.client_id && appt.guest_name && (
+                      <span className="ml-2 text-sky-400 text-xs">avulso</span>
+                    )}
                   </p>
                 </div>
                 <div className="text-right flex flex-col items-end gap-1">
-                  <p className="text-sm text-white">{appt.client?.name ?? '—'}</p>
+                  <p className="text-sm text-white">{appt.client?.name ?? appt.guest_name ?? '—'}</p>
                   <p className="text-zinc-500 text-xs">
-                    {appt.client?.phone ? formatPhone(appt.client.phone) : '—'}
+                    {(appt.client?.phone ?? appt.guest_phone) ? formatPhone((appt.client?.phone ?? appt.guest_phone)!) : '—'}
                   </p>
                   <SyncButton
                     appointmentId={appt.id}

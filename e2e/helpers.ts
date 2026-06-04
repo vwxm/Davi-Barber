@@ -21,6 +21,9 @@ export function testPhone(suffix: string): string {
 
 export async function cleanupTestUsers(): Promise<number> {
   const admin = adminClient()
+  // Guest (account-less) test appointments, identified by an E2E name prefix.
+  await admin.from('appointments').delete().like('guest_name', 'E2E%')
+
   const { data } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 })
   let removed = 0
   for (const u of data.users) {
