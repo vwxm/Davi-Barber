@@ -23,6 +23,17 @@ test('admin can log in and reach the dashboard, agenda and monthly clients', asy
   // Navigate to monthly clients.
   await page.getByRole('link', { name: 'Clientes Mensais' }).click()
   await expect(page.getByRole('heading', { name: 'Clientes Mensais' })).toBeVisible({ timeout: 15_000 })
+
+  // Search page — exercise the search action end-to-end with a no-match query.
+  await page.getByRole('link', { name: 'Buscar' }).click()
+  await expect(page.getByRole('heading', { name: 'Buscar Agendamento' })).toBeVisible({ timeout: 15_000 })
+  await page.getByLabel('Buscar por nome, telefone ou código').fill('zzzqqqsemresultado')
+  await page.getByRole('button', { name: 'Buscar' }).click()
+  await expect(page.getByText('Nenhum agendamento encontrado.')).toBeVisible({ timeout: 15_000 })
+
+  // Report page.
+  await page.getByRole('link', { name: 'Relatório' }).click()
+  await expect(page.getByRole('heading', { name: 'Relatório da Semana' })).toBeVisible({ timeout: 15_000 })
 })
 
 // Saturday of the current week (always in the weekly agenda, never Sunday,

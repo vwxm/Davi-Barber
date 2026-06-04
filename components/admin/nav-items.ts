@@ -1,6 +1,8 @@
 export const ADMIN_NAV = [
   { href: '/admin', label: 'Dashboard', icon: '📅' },
   { href: '/admin/agenda', label: 'Agenda da Semana', icon: '🗓️' },
+  { href: '/admin/buscar', label: 'Buscar', icon: '🔍' },
+  { href: '/admin/relatorio', label: 'Relatório', icon: '📊' },
   { href: '/admin/servicos', label: 'Serviços', icon: '✂️' },
   { href: '/admin/bloqueios', label: 'Bloqueios', icon: '🚫' },
   { href: '/admin/mensais', label: 'Clientes Mensais', icon: '⭐' },
