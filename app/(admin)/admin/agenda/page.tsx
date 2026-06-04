@@ -78,7 +78,7 @@ export default async function AgendaPage() {
             ) : (
               <div className="flex flex-col gap-2">
                 {dayAppts.map((appt) => (
-                  <div key={appt.id} className="bg-zinc-800 rounded-xl p-3 flex items-center justify-between gap-3">
+                  <div key={appt.id} className="bg-zinc-800 rounded-xl p-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
                     <div className="min-w-0">
                       <p className="font-medium text-white">
                         {appt.start_time.slice(0, 5)} · {appt.service?.name ?? '—'}
@@ -95,7 +95,7 @@ export default async function AgendaPage() {
                       </p>
                       <p className="text-zinc-500 text-xs font-mono">cód. {appt.access_code}</p>
                     </div>
-                    <div className="flex flex-col items-end gap-1">
+                    <div className="flex flex-col items-start sm:items-end gap-1 shrink-0">
                       <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${statusBadge[appt.status].className}`}>
                         {statusBadge[appt.status].label}
                       </span>

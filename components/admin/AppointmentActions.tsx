@@ -48,9 +48,9 @@ export function AppointmentActions({ appointmentId }: AppointmentActionsProps) {
 
   if (rescheduling) {
     return (
-      <div className="flex flex-col items-end gap-1">
+      <div className="flex flex-col items-start sm:items-end gap-1">
         {error && <span className="text-red-400 text-xs">{error}</span>}
-        <div className="flex gap-1">
+        <div className="flex flex-wrap gap-1">
           <input type="date" value={newDate} onChange={(e) => setNewDate(e.target.value)}
             className="px-2 py-1 rounded bg-zinc-700 border border-zinc-600 text-white text-xs" />
           <input type="time" value={newTime} onChange={(e) => setNewTime(e.target.value)}
@@ -67,9 +67,9 @@ export function AppointmentActions({ appointmentId }: AppointmentActionsProps) {
   }
 
   return (
-    <div className="flex flex-col items-end gap-1">
+    <div className="flex flex-col items-start sm:items-end gap-1">
       {error && <span className="text-red-400 text-xs">{error}</span>}
-      <div className="flex gap-1">
+      <div className="flex flex-wrap gap-1">
         <button
           type="button"
           disabled={isPending}
