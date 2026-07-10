@@ -203,7 +203,7 @@ export default function BookingSection({ services, availableDates }: BookingSect
             <div className="flex justify-between">
               <span className="text-zinc-400 text-sm">Horário</span>
               <span className="text-white text-sm font-medium">
-                {selectedSlot.start} – {selectedSlot.end}
+                {selectedSlot.start}
               </span>
             </div>
             <div className="flex justify-between">

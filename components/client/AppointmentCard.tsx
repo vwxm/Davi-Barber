@@ -59,7 +59,7 @@ export function AppointmentCard({ appointment, onCancel, isCancelling, available
 
       <p className="text-zinc-400 text-sm">{formatDate(appointment.date)}</p>
       <p className="text-zinc-400 text-sm">
-        {appointment.start_time.slice(0, 5)} – {appointment.end_time.slice(0, 5)}
+        {appointment.start_time.slice(0, 5)}
       </p>
       <p className="text-zinc-400 text-sm">
         Código: <span className="text-white font-mono">{appointment.access_code}</span>
