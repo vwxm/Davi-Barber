@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { computeDayGrid, computeExtension, computeShrink, GRID_START, GRID_END, type SlotState, type ShrinkSlotInfo } from './grid'
+import { computeDayGrid, computeExtension, GRID_START, GRID_END } from './grid'
 import type { Appointment, ScheduleBlock } from '@/types'
 
 const HOURS = { start: '10:00', end: '20:00' }
@@ -19,7 +19,7 @@ function block(partial: Partial<ScheduleBlock>): ScheduleBlock {
   return {
     id: 'b', date: DATE, date_end: null, full_day: false,
     start_time: '11:00', end_time: '11:30', reason: null, active: true,
-    created_at: '', updated_at: '', ...partial,
+    kind: 'bloqueio', created_at: '', updated_at: '', ...partial,
   }
 }
 
@@ -86,77 +86,19 @@ describe('computeDayGrid', () => {
   })
 })
 
-describe('computeShrink', () => {
-  function slots(entries: Array<[string, SlotState, boolean?]>): ShrinkSlotInfo[] {
-    return entries.map(([start, state, soloBlocked]) => ({ start, state, soloBlocked: soloBlocked ?? false }))
-  }
-
-  const SHORT = { start: '10:00', end: '12:00' }
-
-  it('shrinks the close edge past solo-blocked slots', () => {
-    const result = computeShrink(SHORT, slots([
-      ['10:00', 'aberto'],
-      ['10:30', 'aberto'],
-      ['11:00', 'bloqueado', true],
-      ['11:30', 'bloqueado', true],
-    ]))
-    expect(result).toEqual({ open: '10:00', close: '11:00', removed: ['11:00', '11:30'] })
+describe('computeDayGrid — kind fechado', () => {
+  it('kind=fechado blocks show as fechado (grey), not bloqueado', () => {
+    const grid = computeDayGrid(DATE, HOURS, [block({ kind: 'fechado', start_time: '15:00', end_time: '15:30' })], [])
+    expect(stateOf(grid, '15:00')).toBe('fechado')
+    expect(stateOf(grid, '15:30')).toBe('aberto')
   })
 
-  it('shrinks the open edge past solo-blocked slots', () => {
-    const result = computeShrink(SHORT, slots([
-      ['10:00', 'bloqueado', true],
-      ['10:30', 'aberto'],
-      ['11:00', 'aberto'],
-      ['11:30', 'aberto'],
-    ]))
-    expect(result).toEqual({ open: '10:30', close: '12:00', removed: ['10:00'] })
-  })
-
-  it('does not shrink past mid-day blocks or non-solo blocks', () => {
-    // Mid-day block untouched
-    expect(computeShrink(SHORT, slots([
-      ['10:00', 'aberto'],
-      ['10:30', 'bloqueado', true],
-      ['11:00', 'aberto'],
-      ['11:30', 'aberto'],
-    ]))).toBeNull()
-    // Edge slot blocked by a wider block: stays
-    expect(computeShrink(SHORT, slots([
-      ['10:00', 'aberto'],
-      ['10:30', 'aberto'],
-      ['11:00', 'aberto'],
-      ['11:30', 'bloqueado', false],
-    ]))).toBeNull()
-  })
-
-  it('stops at occupied slots', () => {
-    const result = computeShrink(SHORT, slots([
-      ['10:00', 'bloqueado', true],
-      ['10:30', 'ocupado'],
-      ['11:00', 'aberto'],
-      ['11:30', 'aberto'],
-    ]))
-    expect(result).toEqual({ open: '10:30', close: '12:00', removed: ['10:00'] })
-  })
-
-  it('returns null when every slot is blocked (never empty range)', () => {
-    expect(computeShrink(SHORT, slots([
-      ['10:00', 'bloqueado', true],
-      ['10:30', 'bloqueado', true],
-      ['11:00', 'bloqueado', true],
-      ['11:30', 'bloqueado', true],
-    ]))).toBeNull()
-  })
-
-  it('shrinks both edges at once', () => {
-    const result = computeShrink(SHORT, slots([
-      ['10:00', 'bloqueado', true],
-      ['10:30', 'aberto'],
-      ['11:00', 'aberto'],
-      ['11:30', 'bloqueado', true],
-    ]))
-    expect(result).toEqual({ open: '10:30', close: '11:30', removed: ['10:00', '11:30'] })
+  it('a bloqueio covering the same slot wins over fechado', () => {
+    const grid = computeDayGrid(DATE, HOURS, [
+      block({ id: 'b1', kind: 'fechado', start_time: '15:00', end_time: '15:30' }),
+      block({ id: 'b2', kind: 'bloqueio', start_time: '15:00', end_time: '15:30' }),
+    ], [])
+    expect(stateOf(grid, '15:00')).toBe('bloqueado')
   })
 })
 

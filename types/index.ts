@@ -65,6 +65,9 @@ export interface ScheduleBlock {
   start_time: string | null
   end_time: string | null
   reason: string | null
+  // 'bloqueio' = buraco no dia (vermelho); 'fechado' = horário removido do
+  // expediente pela grade (cinza). Ambos escondem o slot dos clientes.
+  kind: 'bloqueio' | 'fechado'
   active: boolean
   created_at: string
   updated_at: string

@@ -5,7 +5,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { requireAdmin } from '@/lib/supabase/require-admin'
 import { validateHoursInput, validateOverrideDate, isHalfHourStep } from '@/lib/schedule/validation'
 import { getEffectiveHours, getScheduleSettings } from '@/lib/schedule/settings'
-import { computeDayGrid, computeExtension, computeShrink, type GridSlot, type ShrinkSlotInfo } from '@/lib/schedule/grid'
+import { computeDayGrid, computeExtension, type GridSlot } from '@/lib/schedule/grid'
 import { timeToMinutes, minutesToTime, SLOT_MINUTES, type EffectiveHours } from '@/lib/business-rules/slots'
 import type { Appointment, DayOverride, ScheduleBlock } from '@/types'
 
@@ -152,77 +152,65 @@ export async function getDayGrid(date: string): Promise<{
   return { grid: computeDayGrid(date, hours, blocks, appointments), hours, fromOverride }
 }
 
-// After blocking, edge slots blocked by their own solo blocks become
-// "fechado": the day's range shrinks past them and the throwaway blocks are
-// deleted. If the range lands back on the default, the override is removed.
-async function normalizeDayEdges(date: string): Promise<string | undefined> {
+// Deactivate the single-date range blocks covering a slot; wider same-day
+// blocks are split into per-slot rows (keeping their kind) so only the tapped
+// slot opens. Full-day/period blocks are refused.
+async function removeCoveringBlocks(
+  date: string,
+  start: string,
+  blocks: ScheduleBlock[],
+): Promise<string | undefined> {
   const supabase = createAdminClient()
-  const { hours, blocks, appointments } = await loadDayData(date)
-  const settings = await getScheduleSettings()
-  const grid = computeDayGrid(date, hours, blocks, appointments)
+  const startMin = timeToMinutes(start)
+  const slotEndMin = startMin + SLOT_MINUTES
 
-  const openMin = timeToMinutes(hours.start)
-  const closeMin = timeToMinutes(hours.end)
-
-  const inside: ShrinkSlotInfo[] = grid
-    .filter((s) => {
-      const t = timeToMinutes(s.start)
-      return t >= openMin && t + SLOT_MINUTES <= closeMin
-    })
-    .map((s) => {
-      const t = timeToMinutes(s.start)
-      const covering = blocks.filter(
-        (b) =>
-          b.full_day ||
-          (b.start_time && b.end_time &&
-            t < timeToMinutes(b.end_time) &&
-            t + SLOT_MINUTES > timeToMinutes(b.start_time)),
-      )
-      const soloBlocked =
-        covering.length > 0 &&
-        covering.every(
-          (b) =>
-            !b.full_day &&
-            !b.date_end &&
-            b.date === date &&
-            b.start_time?.slice(0, 5) === s.start &&
-            timeToMinutes(b.end_time!) === t + SLOT_MINUTES,
-        )
-      return { start: s.start, state: s.state, soloBlocked }
-    })
-
-  const shrink = computeShrink(hours, inside)
-  if (!shrink) return undefined
-
-  // Remove the throwaway single-slot blocks of the closed edge slots.
-  for (const startTime of shrink.removed) {
-    const { error } = await supabase
-      .from('schedule_blocks')
-      .delete()
-      .eq('date', date)
-      .is('date_end', null)
-      .eq('full_day', false)
-      .eq('start_time', startTime)
-    if (error) return error.message
+  const covering = blocks.filter(
+    (b) =>
+      b.full_day ||
+      (b.start_time && b.end_time &&
+        startMin < timeToMinutes(b.end_time) &&
+        slotEndMin > timeToMinutes(b.start_time)),
+  )
+  if (covering.some((b) => b.full_day || b.date_end)) {
+    return 'Este horário faz parte de um bloqueio de dia inteiro ou período. Remova-o na lista de bloqueios.'
   }
 
-  if (shrink.open === settings.open_time && shrink.close === settings.close_time) {
-    const { error } = await supabase.from('day_overrides').delete().eq('date', date)
+  for (const b of covering) {
+    const { error } = await supabase.from('schedule_blocks').delete().eq('id', b.id)
     if (error) return error.message
-  } else {
-    const { error } = await supabase.from('day_overrides').upsert(
-      { date, open_time: shrink.open, close_time: shrink.close, updated_at: new Date().toISOString() },
-      { onConflict: 'date' },
-    )
-    if (error) return error.message
+    const inserts = []
+    for (let t = timeToMinutes(b.start_time!); t < timeToMinutes(b.end_time!); t += SLOT_MINUTES) {
+      if (t === startMin) continue
+      inserts.push({
+        date,
+        date_end: null,
+        full_day: false,
+        start_time: minutesToTime(t),
+        end_time: minutesToTime(t + SLOT_MINUTES),
+        reason: b.reason,
+        kind: b.kind,
+        active: true,
+      })
+    }
+    if (inserts.length > 0) {
+      const { error: splitError } = await supabase.from('schedule_blocks').insert(inserts)
+      if (splitError) return splitError.message
+    }
   }
   return undefined
 }
 
-// One tap on a grid slot: aberto -> bloqueia (nas pontas do expediente,
-// fecha o horário de vez); bloqueado -> reabre;
-// fechado -> estende o expediente do dia (gaps entram bloqueados).
-export async function toggleSlot(date: string, start: string): Promise<{
+// One tap on a grid slot:
+// - aberto + action 'bloquear' -> red hole in the day;
+// - aberto + action 'fechar'   -> hour removed from the day (grey);
+// - bloqueado -> reopens;
+// - fechado inside the range -> reopens (removes the kind='fechado' block);
+// - fechado outside the range -> extends the day's hours (gaps come back grey).
+export async function toggleSlot(
+  date: string,
+  start: string,
+  action?: 'bloquear' | 'fechar',
+): Promise<{
   grid?: GridSlot[]
   hours?: EffectiveHours
   fromOverride?: boolean
@@ -241,13 +229,17 @@ export async function toggleSlot(date: string, start: string): Promise<{
   const slot = grid.find((s) => s.start === start)
   if (!slot) return { error: 'Horário inválido.' }
 
-  const slotEndMin = timeToMinutes(start) + SLOT_MINUTES
+  const startMin = timeToMinutes(start)
+  const slotEndMin = startMin + SLOT_MINUTES
 
   if (slot.state === 'ocupado') {
     return { error: 'Horário ocupado por um cliente.' }
   }
 
   if (slot.state === 'aberto') {
+    if (action !== 'bloquear' && action !== 'fechar') {
+      return { error: 'Escolha bloquear ou fechar.' }
+    }
     const { error } = await supabase.from('schedule_blocks').insert({
       date,
       date_end: null,
@@ -255,76 +247,53 @@ export async function toggleSlot(date: string, start: string): Promise<{
       start_time: start,
       end_time: minutesToTime(slotEndMin),
       reason: null,
+      kind: action === 'fechar' ? 'fechado' : 'bloqueio',
       active: true,
     })
     if (error) return { error: error.message }
-    // Blocking an edge slot means "close this hour": shrink the day's range.
-    const shrinkError = await normalizeDayEdges(date)
-    if (shrinkError) return { error: shrinkError }
   }
 
   if (slot.state === 'bloqueado') {
-    const covering = blocks.filter(
-      (b) =>
-        b.full_day ||
-        (b.start_time && b.end_time &&
-          timeToMinutes(start) < timeToMinutes(b.end_time) &&
-          slotEndMin > timeToMinutes(b.start_time)),
-    )
-    if (covering.some((b) => b.full_day || b.date_end)) {
-      return { error: 'Este horário faz parte de um bloqueio de dia inteiro ou período. Remova-o na lista de bloqueios.' }
-    }
-    for (const b of covering) {
-      const { error } = await supabase.from('schedule_blocks').update({ active: false }).eq('id', b.id)
-      if (error) return { error: error.message }
-      // Split: keep the other slots of a wider same-day block closed.
-      const inserts = []
-      for (let t = timeToMinutes(b.start_time!); t < timeToMinutes(b.end_time!); t += SLOT_MINUTES) {
-        if (t === timeToMinutes(start)) continue
-        inserts.push({
-          date,
-          date_end: null,
-          full_day: false,
-          start_time: minutesToTime(t),
-          end_time: minutesToTime(t + SLOT_MINUTES),
-          reason: b.reason,
-          active: true,
-        })
-      }
-      if (inserts.length > 0) {
-        const { error: splitError } = await supabase.from('schedule_blocks').insert(inserts)
-        if (splitError) return { error: splitError.message }
-      }
-    }
+    const removeError = await removeCoveringBlocks(date, start, blocks)
+    if (removeError) return { error: removeError }
   }
 
   if (slot.state === 'fechado') {
-    const ext = computeExtension(hours, start)
-    const settings = await getScheduleSettings()
-    if (ext.gaps.length === 0 && ext.open === settings.open_time && ext.close === settings.close_time) {
-      // Extension lands exactly on the default hours: drop the override.
-      const { error } = await supabase.from('day_overrides').delete().eq('date', date)
-      if (error) return { error: error.message }
+    const insideRange = startMin >= timeToMinutes(hours.start) && slotEndMin <= timeToMinutes(hours.end)
+    if (insideRange) {
+      // Closed via a kind='fechado' block: reopen it.
+      const removeError = await removeCoveringBlocks(date, start, blocks)
+      if (removeError) return { error: removeError }
     } else {
-      const { error } = await supabase.from('day_overrides').upsert(
-        { date, open_time: ext.open, close_time: ext.close, updated_at: new Date().toISOString() },
-        { onConflict: 'date' },
-      )
-      if (error) return { error: error.message }
-    }
-    if (ext.gaps.length > 0) {
-      const { error: gapError } = await supabase.from('schedule_blocks').insert(
-        ext.gaps.map((g) => ({
-          date,
-          date_end: null,
-          full_day: false,
-          start_time: g,
-          end_time: minutesToTime(timeToMinutes(g) + SLOT_MINUTES),
-          reason: null,
-          active: true,
-        })),
-      )
-      if (gapError) return { error: gapError.message }
+      // Outside the day's hours: extend the range to include this slot.
+      const ext = computeExtension(hours, start)
+      const settings = await getScheduleSettings()
+      if (ext.gaps.length === 0 && ext.open === settings.open_time && ext.close === settings.close_time) {
+        // Extension lands exactly on the default hours: drop the override.
+        const { error } = await supabase.from('day_overrides').delete().eq('date', date)
+        if (error) return { error: error.message }
+      } else {
+        const { error } = await supabase.from('day_overrides').upsert(
+          { date, open_time: ext.open, close_time: ext.close, updated_at: new Date().toISOString() },
+          { onConflict: 'date' },
+        )
+        if (error) return { error: error.message }
+      }
+      if (ext.gaps.length > 0) {
+        const { error: gapError } = await supabase.from('schedule_blocks').insert(
+          ext.gaps.map((g) => ({
+            date,
+            date_end: null,
+            full_day: false,
+            start_time: g,
+            end_time: minutesToTime(timeToMinutes(g) + SLOT_MINUTES),
+            reason: null,
+            kind: 'fechado',
+            active: true,
+          })),
+        )
+        if (gapError) return { error: gapError.message }
+      }
     }
   }
 

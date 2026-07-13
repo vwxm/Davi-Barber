@@ -15,6 +15,7 @@ export default async function HorariosPage() {
     .gte('date', today)
     .order('date')
     .eq('active', true)
+    .eq('kind', 'bloqueio') // grid-managed "fechado" rows stay out of the list
   const blocks: ScheduleBlock[] = data ?? []
 
   return (

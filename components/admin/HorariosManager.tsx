@@ -71,6 +71,8 @@ export function HorariosManager({ settings, blocks }: HorariosManagerProps) {
   const [dayHours, setDayHours] = useState<EffectiveHours | null>(null)
   const [dayFromOverride, setDayFromOverride] = useState(false)
   const [dayError, setDayError] = useState<string | null>(null)
+  // Slot waiting for the barber to choose "bloquear" or "fechar".
+  const [choosing, setChoosing] = useState<string | null>(null)
 
   const [isPending, startTransition] = useTransition()
 
@@ -114,11 +116,11 @@ export function HorariosManager({ settings, blocks }: HorariosManagerProps) {
     })
   }
 
-  function tapSlot(slot: GridSlot) {
-    if (!day || slot.state === 'ocupado' || isPending) return
+  function applyToggle(start: string, action?: 'bloquear' | 'fechar') {
+    if (!day) return
     startTransition(async () => {
       setDayError(null)
-      const result = await toggleSlot(day, slot.start)
+      const result = await toggleSlot(day, start, action)
       if (result.error || !result.grid || !result.hours) {
         setDayError(result.error ?? 'Erro ao atualizar o horário.')
         return
@@ -127,6 +129,22 @@ export function HorariosManager({ settings, blocks }: HorariosManagerProps) {
       setDayHours(result.hours)
       setDayFromOverride(!!result.fromOverride)
     })
+  }
+
+  function tapSlot(slot: GridSlot) {
+    if (!day || slot.state === 'ocupado' || isPending) return
+    if (slot.state === 'aberto') {
+      // Barber chooses: bloquear (red) or fechar (grey).
+      setChoosing(slot.start)
+      return
+    }
+    applyToggle(slot.start)
+  }
+
+  function choose(action: 'bloquear' | 'fechar') {
+    const start = choosing
+    setChoosing(null)
+    if (start) applyToggle(start, action)
   }
 
   function fullDate(date: string): string {
@@ -239,11 +257,48 @@ export function HorariosManager({ settings, blocks }: HorariosManagerProps) {
                   ))}
                 </div>
                 <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-zinc-400">
-                  <span><span className="text-amber-300">■</span> aberto — toque para bloquear (na ponta do dia, fecha)</span>
+                  <span><span className="text-amber-300">■</span> aberto — toque e escolha bloquear ou fechar</span>
                   <span><span className="text-red-400">■</span> bloqueado — toque para reabrir</span>
-                  <span><span className="text-zinc-500">■</span> fechado — toque para adicionar</span>
+                  <span><span className="text-zinc-500">■</span> fechado — toque para abrir</span>
                   <span><span className="text-zinc-300">■</span> ocupado (cliente)</span>
                 </div>
+
+                {choosing && (
+                  <div
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-6"
+                    onClick={() => setChoosing(null)}
+                  >
+                    <div
+                      className="w-full max-w-xs bg-zinc-800 border border-zinc-700 rounded-xl p-4 space-y-3"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <p className="text-white font-semibold text-center">{choosing}</p>
+                      <button
+                        type="button"
+                        onClick={() => choose('bloquear')}
+                        className="w-full rounded-lg border border-red-500/60 bg-red-500/15 text-red-300 py-3 text-sm font-medium"
+                      >
+                        Bloquear horário
+                        <span className="block text-xs text-zinc-400 font-normal">Fica vermelho na grade; fácil de reabrir depois.</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => choose('fechar')}
+                        className="w-full rounded-lg border border-zinc-600 bg-zinc-900 text-zinc-300 py-3 text-sm font-medium"
+                      >
+                        Fechar horário
+                        <span className="block text-xs text-zinc-500 font-normal">Sai do expediente do dia (cinza).</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setChoosing(null)}
+                        className="w-full rounded-lg text-zinc-400 py-2 text-sm"
+                      >
+                        Cancelar
+                      </button>
+                    </div>
+                  </div>
+                )}
               </>
             )}
           </div>

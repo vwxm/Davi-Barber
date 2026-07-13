@@ -23,7 +23,7 @@ function block(partial: Partial<ScheduleBlock>): ScheduleBlock {
   return {
     id: 'b', date: future, date_end: null, full_day: true,
     start_time: null, end_time: null, reason: null, active: true,
-    created_at: '', updated_at: '', ...partial,
+    kind: 'bloqueio', created_at: '', updated_at: '', ...partial,
   }
 }
 
