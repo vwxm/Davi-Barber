@@ -6,6 +6,9 @@ const ADMIN_EMAIL = 'e2e-horarios@davibarber.app'
 const ADMIN_PASSWORD = `E2e-${Math.random().toString(36).slice(2)}!7`
 const PHONE = testPhone('55')
 
+// The grid test makes ~12 server-action roundtrips against the dev server.
+test.setTimeout(120_000)
+
 async function deleteTempAdmin() {
   const admin = adminClient()
   const { data } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 })
@@ -75,17 +78,43 @@ test('admin edits default hours and toggles slots on the visual grid', async ({ 
   await expect(slot('10:00')).toHaveAttribute('data-state', 'aberto', { timeout: 15_000 })
   await expect(slot('09:30')).toHaveAttribute('data-state', 'fechado')
 
-  // Tap 10:00 -> blocks it. Tap again -> reopens.
+  // Tap a MID-DAY slot -> blocks it (red). Tap again -> reopens.
+  await slot('14:00').click()
+  await expect(slot('14:00')).toHaveAttribute('data-state', 'bloqueado', { timeout: 15_000 })
+  await slot('14:00').click()
+  await expect(slot('14:00')).toHaveAttribute('data-state', 'aberto', { timeout: 15_000 })
+
+  // Tap the OPEN edge (10:00) -> closes the hour (grid shrinks, no red).
   await slot('10:00').click()
-  await expect(slot('10:00')).toHaveAttribute('data-state', 'bloqueado', { timeout: 15_000 })
+  await expect(slot('10:00')).toHaveAttribute('data-state', 'fechado', { timeout: 15_000 })
+  await expect(page.getByText('(ajustado)')).toBeVisible()
+  // Reopen it -> back to the default day.
   await slot('10:00').click()
   await expect(slot('10:00')).toHaveAttribute('data-state', 'aberto', { timeout: 15_000 })
+  await expect(page.getByText('(ajustado)')).toBeHidden()
 
   // Tap 09:00 (fechado) -> adds it; the 09:30 gap slot comes back blocked.
   await slot('09:00').click()
   await expect(slot('09:00')).toHaveAttribute('data-state', 'aberto', { timeout: 15_000 })
   await expect(slot('09:30')).toHaveAttribute('data-state', 'bloqueado')
   await expect(page.getByText('(ajustado)')).toBeVisible()
+
+  // Tap 09:00 again -> closes the added hour: the edge shrinks back past the
+  // blocked 09:30 gap too, and the day returns to the default hours.
+  await slot('09:00').click()
+  await expect(slot('09:00')).toHaveAttribute('data-state', 'fechado', { timeout: 15_000 })
+  await expect(slot('09:30')).toHaveAttribute('data-state', 'fechado')
+  await expect(slot('10:00')).toHaveAttribute('data-state', 'aberto')
+  await expect(page.getByText('(ajustado)')).toBeHidden()
+
+  // Closing the last hour of the default day also works: tap 19:30 (aberto).
+  await slot('19:30').click()
+  await expect(slot('19:30')).toHaveAttribute('data-state', 'fechado', { timeout: 15_000 })
+  await expect(page.getByText('(ajustado)')).toBeVisible()
+  // Reopen it: tap again (fechado -> adiciona) and the day is default again.
+  await slot('19:30').click()
+  await expect(slot('19:30')).toHaveAttribute('data-state', 'aberto', { timeout: 15_000 })
+  await expect(page.getByText('(ajustado)')).toBeHidden()
 
   // Old route redirects.
   await page.goto('/admin/bloqueios')

@@ -239,7 +239,7 @@ export function HorariosManager({ settings, blocks }: HorariosManagerProps) {
                   ))}
                 </div>
                 <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-zinc-400">
-                  <span><span className="text-amber-300">■</span> aberto — toque para bloquear</span>
+                  <span><span className="text-amber-300">■</span> aberto — toque para bloquear (na ponta do dia, fecha)</span>
                   <span><span className="text-red-400">■</span> bloqueado — toque para reabrir</span>
                   <span><span className="text-zinc-500">■</span> fechado — toque para adicionar</span>
                   <span><span className="text-zinc-300">■</span> ocupado (cliente)</span>

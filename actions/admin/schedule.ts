@@ -4,8 +4,8 @@ import { revalidatePath } from 'next/cache'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { requireAdmin } from '@/lib/supabase/require-admin'
 import { validateHoursInput, validateOverrideDate, isHalfHourStep } from '@/lib/schedule/validation'
-import { getEffectiveHours } from '@/lib/schedule/settings'
-import { computeDayGrid, computeExtension, type GridSlot } from '@/lib/schedule/grid'
+import { getEffectiveHours, getScheduleSettings } from '@/lib/schedule/settings'
+import { computeDayGrid, computeExtension, computeShrink, type GridSlot, type ShrinkSlotInfo } from '@/lib/schedule/grid'
 import { timeToMinutes, minutesToTime, SLOT_MINUTES, type EffectiveHours } from '@/lib/business-rules/slots'
 import type { Appointment, DayOverride, ScheduleBlock } from '@/types'
 
@@ -152,7 +152,75 @@ export async function getDayGrid(date: string): Promise<{
   return { grid: computeDayGrid(date, hours, blocks, appointments), hours, fromOverride }
 }
 
-// One tap on a grid slot: aberto -> bloqueia; bloqueado -> reabre;
+// After blocking, edge slots blocked by their own solo blocks become
+// "fechado": the day's range shrinks past them and the throwaway blocks are
+// deleted. If the range lands back on the default, the override is removed.
+async function normalizeDayEdges(date: string): Promise<string | undefined> {
+  const supabase = createAdminClient()
+  const { hours, blocks, appointments } = await loadDayData(date)
+  const settings = await getScheduleSettings()
+  const grid = computeDayGrid(date, hours, blocks, appointments)
+
+  const openMin = timeToMinutes(hours.start)
+  const closeMin = timeToMinutes(hours.end)
+
+  const inside: ShrinkSlotInfo[] = grid
+    .filter((s) => {
+      const t = timeToMinutes(s.start)
+      return t >= openMin && t + SLOT_MINUTES <= closeMin
+    })
+    .map((s) => {
+      const t = timeToMinutes(s.start)
+      const covering = blocks.filter(
+        (b) =>
+          b.full_day ||
+          (b.start_time && b.end_time &&
+            t < timeToMinutes(b.end_time) &&
+            t + SLOT_MINUTES > timeToMinutes(b.start_time)),
+      )
+      const soloBlocked =
+        covering.length > 0 &&
+        covering.every(
+          (b) =>
+            !b.full_day &&
+            !b.date_end &&
+            b.date === date &&
+            b.start_time?.slice(0, 5) === s.start &&
+            timeToMinutes(b.end_time!) === t + SLOT_MINUTES,
+        )
+      return { start: s.start, state: s.state, soloBlocked }
+    })
+
+  const shrink = computeShrink(hours, inside)
+  if (!shrink) return undefined
+
+  // Remove the throwaway single-slot blocks of the closed edge slots.
+  for (const startTime of shrink.removed) {
+    const { error } = await supabase
+      .from('schedule_blocks')
+      .delete()
+      .eq('date', date)
+      .is('date_end', null)
+      .eq('full_day', false)
+      .eq('start_time', startTime)
+    if (error) return error.message
+  }
+
+  if (shrink.open === settings.open_time && shrink.close === settings.close_time) {
+    const { error } = await supabase.from('day_overrides').delete().eq('date', date)
+    if (error) return error.message
+  } else {
+    const { error } = await supabase.from('day_overrides').upsert(
+      { date, open_time: shrink.open, close_time: shrink.close, updated_at: new Date().toISOString() },
+      { onConflict: 'date' },
+    )
+    if (error) return error.message
+  }
+  return undefined
+}
+
+// One tap on a grid slot: aberto -> bloqueia (nas pontas do expediente,
+// fecha o horário de vez); bloqueado -> reabre;
 // fechado -> estende o expediente do dia (gaps entram bloqueados).
 export async function toggleSlot(date: string, start: string): Promise<{
   grid?: GridSlot[]
@@ -190,6 +258,9 @@ export async function toggleSlot(date: string, start: string): Promise<{
       active: true,
     })
     if (error) return { error: error.message }
+    // Blocking an edge slot means "close this hour": shrink the day's range.
+    const shrinkError = await normalizeDayEdges(date)
+    if (shrinkError) return { error: shrinkError }
   }
 
   if (slot.state === 'bloqueado') {
@@ -229,11 +300,18 @@ export async function toggleSlot(date: string, start: string): Promise<{
 
   if (slot.state === 'fechado') {
     const ext = computeExtension(hours, start)
-    const { error } = await supabase.from('day_overrides').upsert(
-      { date, open_time: ext.open, close_time: ext.close, updated_at: new Date().toISOString() },
-      { onConflict: 'date' },
-    )
-    if (error) return { error: error.message }
+    const settings = await getScheduleSettings()
+    if (ext.gaps.length === 0 && ext.open === settings.open_time && ext.close === settings.close_time) {
+      // Extension lands exactly on the default hours: drop the override.
+      const { error } = await supabase.from('day_overrides').delete().eq('date', date)
+      if (error) return { error: error.message }
+    } else {
+      const { error } = await supabase.from('day_overrides').upsert(
+        { date, open_time: ext.open, close_time: ext.close, updated_at: new Date().toISOString() },
+        { onConflict: 'date' },
+      )
+      if (error) return { error: error.message }
+    }
     if (ext.gaps.length > 0) {
       const { error: gapError } = await supabase.from('schedule_blocks').insert(
         ext.gaps.map((g) => ({

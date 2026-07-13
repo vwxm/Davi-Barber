@@ -48,6 +48,43 @@ export function computeDayGrid(
   return grid
 }
 
+// Blocking a slot at the EDGE of the day's range means "close this hour":
+// the range shrinks past every edge slot that is blocked by its own solo
+// (single-slot, single-date) block, and those throwaway blocks are removed —
+// the slots go back to "fechado". Mid-day blocks and slots covered by wider
+// blocks are untouched. Returns null when there is nothing to shrink (or when
+// every slot is blocked — a range must never become empty).
+export interface ShrinkSlotInfo {
+  start: string
+  state: SlotState
+  // true when the slot is blocked ONLY by exact single-slot blocks of this date
+  soloBlocked: boolean
+}
+
+export function computeShrink(
+  hours: EffectiveHours,
+  slots: ShrinkSlotInfo[], // grid slots inside [open, close), in order
+): { open: string; close: string; removed: string[] } | null {
+  let lo = 0
+  let hi = slots.length - 1
+  const removed: string[] = []
+
+  while (lo <= hi && slots[lo].state === 'bloqueado' && slots[lo].soloBlocked) lo++
+  while (hi >= lo && slots[hi].state === 'bloqueado' && slots[hi].soloBlocked) hi--
+
+  if (lo > hi) return null // everything blocked — keep the range
+  if (lo === 0 && hi === slots.length - 1) return null // nothing to shrink
+
+  for (let i = 0; i < lo; i++) removed.push(slots[i].start)
+  for (let i = hi + 1; i < slots.length; i++) removed.push(slots[i].start)
+
+  return {
+    open: slots[lo].start,
+    close: minutesToTime(timeToMinutes(slots[hi].start) + SLOT_MINUTES),
+    removed,
+  }
+}
+
 // Opening a "fechado" slot extends the day's range to include it. Slots that
 // fall inside the new range but were previously closed (the gap) come back
 // BLOCKED, so tapping 21:00 doesn't silently open 20:00 and 20:30 too.
