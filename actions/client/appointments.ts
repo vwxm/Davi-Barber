@@ -63,12 +63,14 @@ export async function getAvailableSlotsForDate(
 
     const blockList = (blocks ?? []) as ScheduleBlock[]
 
+    // TODO(task-5): use getEffectiveHours + settings lead
     const slots = getAvailableSlots(
       date,
       service.duration_minutes,
       (appointments ?? []) as Appointment[],
       blockList,
       new Date().toISOString(),
+      { start: '10:00', end: '20:00' },
     )
 
     // If a full-day block covers this date, surface its reason to the client.

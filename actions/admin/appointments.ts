@@ -4,7 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { requireAdmin } from '@/lib/supabase/require-admin'
 import { deleteCalendarEvent } from '@/lib/google-calendar/sync'
 import { syncAppointmentEvent } from '@/lib/google-calendar/sync-appointment'
-import { BUSINESS_HOURS, timeToMinutes, minutesToTime } from '@/lib/business-rules/slots'
+import { CLOSED_WEEKDAYS, timeToMinutes, minutesToTime } from '@/lib/business-rules/slots'
 import type { AppointmentStatus } from '@/types'
 
 function accessCode(): string {
@@ -21,11 +21,12 @@ function weekdayOf(dateStr: string): number {
 function validateSlot(date: string, start: string, durationMinutes: number): { end?: string; error?: string } {
   const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
   if (date < today) return { error: 'A data não pode ser no passado.' }
-  if (BUSINESS_HOURS.closedWeekdays.includes(weekdayOf(date))) return { error: 'Dia sem atendimento (domingo).' }
+  if (CLOSED_WEEKDAYS.includes(weekdayOf(date))) return { error: 'Dia sem atendimento (domingo).' }
 
   const startMin = timeToMinutes(start)
   const endMin = startMin + durationMinutes
-  if (startMin < timeToMinutes(BUSINESS_HOURS.start) || endMin > timeToMinutes(BUSINESS_HOURS.end)) {
+  // TODO(task-6): use getEffectiveHours
+  if (startMin < timeToMinutes('10:00') || endMin > timeToMinutes('20:00')) {
     return { error: 'Horário fora do expediente.' }
   }
   return { end: minutesToTime(endMin) }

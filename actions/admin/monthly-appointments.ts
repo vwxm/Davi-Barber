@@ -3,7 +3,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { requireAdmin } from '@/lib/supabase/require-admin'
 import { syncAppointmentEvent } from '@/lib/google-calendar/sync-appointment'
-import { BUSINESS_HOURS, timeToMinutes, minutesToTime } from '@/lib/business-rules/slots'
+import { CLOSED_WEEKDAYS, timeToMinutes, minutesToTime } from '@/lib/business-rules/slots'
 import { currentWeekMonday } from '@/lib/business-rules/monthly'
 
 // Move a monthly client's appointment within the current week only (punctual
@@ -35,7 +35,7 @@ export async function rescheduleMonthlyAppointment(
   }
 
   const weekday = new Date(newDate + 'T12:00:00Z').getUTCDay()
-  if (BUSINESS_HOURS.closedWeekdays.includes(weekday)) {
+  if (CLOSED_WEEKDAYS.includes(weekday)) {
     return { error: 'Dia sem atendimento.' }
   }
 
@@ -44,7 +44,8 @@ export async function rescheduleMonthlyAppointment(
 
   const startMin = timeToMinutes(newStartTime)
   const endMin = startMin + duration
-  if (startMin < timeToMinutes(BUSINESS_HOURS.start) || endMin > timeToMinutes(BUSINESS_HOURS.end)) {
+  // TODO(task-6): use getEffectiveHours
+  if (startMin < timeToMinutes('10:00') || endMin > timeToMinutes('20:00')) {
     return { error: 'Horário fora do expediente.' }
   }
   const start = minutesToTime(startMin)

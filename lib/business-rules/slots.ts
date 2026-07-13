@@ -1,12 +1,12 @@
-import type { Appointment, ScheduleBlock, TimeSlot, BusinessHours } from '@/types'
+import type { Appointment, ScheduleBlock, TimeSlot } from '@/types'
 
-export const BUSINESS_HOURS: BusinessHours = {
-  start: '09:00',
-  end: '19:00',
-  slotMinutes: 30,
-  breaks: [{ start: '12:00', end: '13:00' }],
-  closedWeekdays: [0], // domingo
+export interface EffectiveHours {
+  start: string // 'HH:MM'
+  end: string   // 'HH:MM'
 }
+
+export const SLOT_MINUTES = 30
+export const CLOSED_WEEKDAYS = [0] // domingo
 
 export const TIMEZONE = process.env.BARBERSHOP_TIMEZONE ?? 'America/Sao_Paulo'
 
@@ -42,18 +42,18 @@ export function getAvailableSlots(
   appointments: Appointment[],
   blocks: ScheduleBlock[],
   nowISO: string,
+  hours: EffectiveHours,
+  minLeadMinutes = 0,
 ): TimeSlot[] {
-  const { start, end, slotMinutes, breaks, closedWeekdays } = BUSINESS_HOURS
-
   // T12:00:00Z ensures the UTC date matches the calendar date in any timezone
   const weekday = new Date(date + 'T12:00:00Z').getUTCDay()
-  if (closedWeekdays.includes(weekday)) return []
+  if (CLOSED_WEEKDAYS.includes(weekday)) return []
 
   const fullDayBlock = blocks.find(b => b.active && b.full_day && blockCoversDate(b, date))
   if (fullDayBlock) return []
 
-  const startMin = timeToMinutes(start)
-  const endMin = timeToMinutes(end)
+  const startMin = timeToMinutes(hours.start)
+  const endMin = timeToMinutes(hours.end)
   const slots: TimeSlot[] = []
 
   const now = new Date(nowISO)
@@ -67,14 +67,13 @@ export function getAvailableSlots(
       })()
     : 0
 
-  for (let t = startMin; t + durationMinutes <= endMin; t += slotMinutes) {
+  for (let t = startMin; t + durationMinutes <= endMin; t += SLOT_MINUTES) {
     const slotStart = minutesToTime(t)
     const slotEnd = minutesToTime(t + durationMinutes)
 
-    if (isToday && t <= nowMinutes) continue
-
-    const blockedByBreak = breaks.some(b => rangesOverlap(slotStart, slotEnd, b.start, b.end))
-    if (blockedByBreak) continue
+    // Same-day: a client can only pick slots at least minLeadMinutes away
+    // (lead 0 preserves the old "no past slots" behavior).
+    if (isToday && (minLeadMinutes > 0 ? t < nowMinutes + minLeadMinutes : t <= nowMinutes)) continue
 
     const blockedByBlock = blocks.some(b =>
       b.active && !b.full_day &&
