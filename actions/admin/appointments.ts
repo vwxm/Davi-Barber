@@ -5,6 +5,7 @@ import { requireAdmin } from '@/lib/supabase/require-admin'
 import { deleteCalendarEvent } from '@/lib/google-calendar/sync'
 import { syncAppointmentEvent } from '@/lib/google-calendar/sync-appointment'
 import { CLOSED_WEEKDAYS, timeToMinutes, minutesToTime } from '@/lib/business-rules/slots'
+import { getEffectiveHours } from '@/lib/schedule/settings'
 import type { AppointmentStatus } from '@/types'
 
 function accessCode(): string {
@@ -16,17 +17,17 @@ function weekdayOf(dateStr: string): number {
 }
 
 // Validate a date/time against the shop rules (not past, not Sunday, within
-// business hours) and return the computed end time. Admins are not limited to
-// the client booking window — they can book further ahead.
-function validateSlot(date: string, start: string, durationMinutes: number): { end?: string; error?: string } {
+// the day's effective hours). Admins have no lead-time restriction and are
+// not limited to the client booking window — they can book further ahead.
+async function validateSlot(date: string, start: string, durationMinutes: number): Promise<{ end?: string; error?: string }> {
   const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
   if (date < today) return { error: 'A data não pode ser no passado.' }
   if (CLOSED_WEEKDAYS.includes(weekdayOf(date))) return { error: 'Dia sem atendimento (domingo).' }
 
+  const { hours } = await getEffectiveHours(date)
   const startMin = timeToMinutes(start)
   const endMin = startMin + durationMinutes
-  // TODO(task-6): use getEffectiveHours
-  if (startMin < timeToMinutes('10:00') || endMin > timeToMinutes('20:00')) {
+  if (startMin < timeToMinutes(hours.start) || endMin > timeToMinutes(hours.end)) {
     return { error: 'Horário fora do expediente.' }
   }
   return { end: minutesToTime(endMin) }
@@ -55,7 +56,7 @@ export async function createGuestAppointment(data: {
     .single()
   if (!service) return { error: 'Serviço não encontrado ou inativo.' }
 
-  const { end, error: slotError } = validateSlot(data.date, data.start_time, service.duration_minutes)
+  const { end, error: slotError } = await validateSlot(data.date, data.start_time, service.duration_minutes)
   if (slotError) return { error: slotError }
 
   const { data: inserted, error } = await supabase
@@ -103,7 +104,7 @@ export async function rescheduleAppointmentAdmin(
   const duration = (appt.service as unknown as { duration_minutes: number } | null)?.duration_minutes
   if (!duration) return { error: 'Serviço inválido.' }
 
-  const { end, error: slotError } = validateSlot(newDate, newStartTime, duration)
+  const { end, error: slotError } = await validateSlot(newDate, newStartTime, duration)
   if (slotError) return { error: slotError }
 
   const { error } = await supabase
