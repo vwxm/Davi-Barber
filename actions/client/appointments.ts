@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { getAvailableSlots, blockCoversDate } from '@/lib/business-rules/slots'
 import { ensureCurrentWeekMonthlyAppointments } from '@/lib/monthly/ensure'
 import { isDateInBookingWindow } from '@/lib/business-rules/booking-window'
+import { getEffectiveHours } from '@/lib/schedule/settings'
 import { syncAppointmentEvent } from '@/lib/google-calendar/sync-appointment'
 import { deleteCalendarEvent } from '@/lib/google-calendar/sync'
 import type { Appointment, TimeSlot, BookingInput, ScheduleBlock } from '@/types'
@@ -63,14 +64,16 @@ export async function getAvailableSlotsForDate(
 
     const blockList = (blocks ?? []) as ScheduleBlock[]
 
-    // TODO(task-5): use getEffectiveHours + settings lead
+    const { hours, settings } = await getEffectiveHours(date)
+
     const slots = getAvailableSlots(
       date,
       service.duration_minutes,
       (appointments ?? []) as Appointment[],
       blockList,
       new Date().toISOString(),
-      { start: '10:00', end: '20:00' },
+      hours,
+      settings.min_lead_minutes,
     )
 
     // If a full-day block covers this date, surface its reason to the client.
@@ -114,6 +117,15 @@ export async function bookAppointment(
 
     if (serviceError || !service) {
       return { error: 'Serviço não encontrado ou indisponível.' }
+    }
+
+    // Revalidate the requested slot server-side (grid, blocks, lead time).
+    const slotCheck = await getAvailableSlotsForDate(input.date, input.service_id)
+    const requested = slotCheck.slots?.find(
+      (s) => s.start === input.start_time && s.available,
+    )
+    if (!requested) {
+      return { error: 'Horário não disponível. Escolha outro horário.' }
     }
 
     // Calculate end_time based on duration
@@ -249,7 +261,7 @@ export async function rescheduleAppointment(
 
     const { data: appt } = await supabase
       .from('appointments')
-      .select('id, status, service:services(duration_minutes)')
+      .select('id, status, service_id, service:services(duration_minutes)')
       .eq('id', appointmentId)
       .eq('client_id', authData.user.id)
       .eq('status', 'scheduled')
@@ -259,6 +271,18 @@ export async function rescheduleAppointment(
 
     const duration = (appt.service as unknown as { duration_minutes: number } | null)?.duration_minutes
     if (!duration) return { error: 'Serviço inválido.' }
+
+    // Revalidate the requested slot server-side (grid, blocks, lead time).
+    // Note: slots overlapping the appointment being moved count as occupied,
+    // so moving into a slot that overlaps ITSELF is refused (rare; the client
+    // can cancel and rebook).
+    const slotCheck = await getAvailableSlotsForDate(newDate, appt.service_id)
+    const requested = slotCheck.slots?.find(
+      (s) => s.start === newStartTime && s.available,
+    )
+    if (!requested) {
+      return { error: 'Horário não disponível. Escolha outro horário.' }
+    }
 
     const [h, m] = newStartTime.split(':').map(Number)
     const endTotal = h * 60 + m + duration
