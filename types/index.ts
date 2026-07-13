@@ -82,10 +82,19 @@ export interface BookingInput {
   start_time: string
 }
 
-export interface BusinessHours {
-  start: string
-  end: string
-  slotMinutes: number
-  breaks: Array<{ start: string; end: string }>
-  closedWeekdays: number[]
+export interface ScheduleSettings {
+  id: number
+  open_time: string       // 'HH:MM'
+  close_time: string      // 'HH:MM'
+  min_lead_minutes: number
+  updated_at: string
+}
+
+export interface DayOverride {
+  id: string
+  date: string            // 'YYYY-MM-DD'
+  open_time: string       // 'HH:MM'
+  close_time: string      // 'HH:MM'
+  created_at: string
+  updated_at: string
 }
