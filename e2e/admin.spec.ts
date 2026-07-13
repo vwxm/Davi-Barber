@@ -1,8 +1,35 @@
 import { test, expect } from '@playwright/test'
+import { adminClient } from './helpers'
 
-// Admin credentials come from env, falling back to the known dev admin.
-const ADMIN_EMAIL = process.env.E2E_ADMIN_EMAIL ?? 'vitormigli.vm@gmail.com'
-const ADMIN_PASSWORD = process.env.E2E_ADMIN_PASSWORD ?? 'Davibarber@2026'
+// A throwaway admin created for this run (the real admin password is not
+// known to CI). E2E_ADMIN_* env vars override to use an existing account.
+const ADMIN_EMAIL = process.env.E2E_ADMIN_EMAIL ?? 'e2e-admin@davibarber.app'
+const ADMIN_PASSWORD = process.env.E2E_ADMIN_PASSWORD ?? `E2e-${Math.random().toString(36).slice(2)}!3`
+const USING_TEMP_ADMIN = !process.env.E2E_ADMIN_EMAIL
+
+async function deleteTempAdmin() {
+  const admin = adminClient()
+  const { data } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 })
+  const u = data.users.find((x) => x.email === 'e2e-admin@davibarber.app')
+  if (u) await admin.auth.admin.deleteUser(u.id)
+}
+
+test.beforeAll(async () => {
+  if (!USING_TEMP_ADMIN) return
+  await deleteTempAdmin()
+  const { error } = await adminClient().auth.admin.createUser({
+    email: ADMIN_EMAIL,
+    password: ADMIN_PASSWORD,
+    email_confirm: true,
+    app_metadata: { role: 'admin' },
+    user_metadata: { name: 'E2E Admin' },
+  })
+  if (error) throw new Error(error.message)
+})
+
+test.afterAll(async () => {
+  if (USING_TEMP_ADMIN) await deleteTempAdmin()
+})
 
 test('admin can log in and reach the dashboard, agenda and monthly clients', async ({ page }) => {
   await page.goto('/admin/login')

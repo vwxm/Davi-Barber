@@ -110,8 +110,15 @@ export function HorariosManager({ settings, blocks }: HorariosManagerProps) {
       setDayMsg(null)
       const result = await removeDayOverride(day)
       if (result.error) { setDayError(result.error); return }
+      // Reload the day inline (loadDay would clear the success message).
+      const fresh = await getDaySchedule(day)
+      if (fresh.hours) {
+        setDayHours(fresh.hours)
+        setDayFromOverride(!!fresh.fromOverride)
+        setDayOpen(fresh.hours.start)
+        setDayClose(fresh.hours.end)
+      }
       setDayMsg('Dia voltou ao horário padrão.')
-      loadDay(day)
     })
   }
 
