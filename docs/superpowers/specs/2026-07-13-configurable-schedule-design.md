@@ -110,7 +110,32 @@ Domingo nunca tem grade (`closedWeekdays = [0]` continua).
 
 ## UI
 
-### Admin — página "Horários" (evolução de `/admin/bloqueios`)
+### Admin — página "Horários" — REVISÃO 2026-07-13 (feedback do barbeiro)
+
+O ajuste por dia NÃO usa inputs de data/hora digitados. É visual, igual à
+grade do cliente:
+
+- **Botões de dia** (como o cliente vê): semana atual + próxima (seg–sáb,
+  12 botões).
+- **Grade de slots em retângulos** (06:00–23:30, passos de 30 min) para o
+  dia selecionado, com 4 estados:
+  - **aberto** (âmbar) — dentro do expediente, livre → tocar **bloqueia**
+    (cria bloqueio de 30 min);
+  - **bloqueado** (vermelho) — tocar **reabre** (desativa o bloqueio; se o
+    slot fizer parte de um bloqueio de faixa do mesmo dia, o bloqueio é
+    dividido nos demais slots; bloqueios de dia inteiro/período não são
+    tocáveis — remover na lista);
+  - **fechado** (cinza) — fora do expediente → tocar **adiciona** (estende
+    a abertura/fechamento do dia via override; os slots do "vão" entre o
+    expediente antigo e o novo slot entram bloqueados para não abrir hora
+    que o barbeiro não pediu);
+  - **ocupado** — tem cliente agendado; travado.
+- O card "Horário padrão" (selects) e a lista de Bloqueios (dia inteiro,
+  período/férias) continuam.
+
+A seção abaixo descreve a versão 1 (obsoleta na parte do "Ajustes por dia"):
+
+### Admin — página "Horários" (evolução de `/admin/bloqueios`) — v1
 
 - Rota nova `/admin/horarios`; `/admin/bloqueios` redireciona para ela. Item
   do menu: "Horários" (substitui "Bloqueios") em

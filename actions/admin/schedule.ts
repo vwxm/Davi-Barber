@@ -3,10 +3,11 @@
 import { revalidatePath } from 'next/cache'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { requireAdmin } from '@/lib/supabase/require-admin'
-import { validateHoursInput, validateOverrideDate } from '@/lib/schedule/validation'
+import { validateHoursInput, validateOverrideDate, isHalfHourStep } from '@/lib/schedule/validation'
 import { getEffectiveHours } from '@/lib/schedule/settings'
-import type { EffectiveHours } from '@/lib/business-rules/slots'
-import type { DayOverride, ScheduleBlock } from '@/types'
+import { computeDayGrid, computeExtension, type GridSlot } from '@/lib/schedule/grid'
+import { timeToMinutes, minutesToTime, SLOT_MINUTES, type EffectiveHours } from '@/lib/business-rules/slots'
+import type { Appointment, DayOverride, ScheduleBlock } from '@/types'
 
 function todaySP(): string {
   return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
@@ -111,4 +112,149 @@ export async function getDaySchedule(date: string): Promise<{
 
   if (error) return { error: error.message }
   return { hours, fromOverride, blocks: (blocks ?? []) as ScheduleBlock[] }
+}
+
+async function loadDayData(date: string): Promise<{
+  hours: EffectiveHours
+  fromOverride: boolean
+  blocks: ScheduleBlock[]
+  appointments: Appointment[]
+}> {
+  const supabase = createAdminClient()
+  const { hours, fromOverride } = await getEffectiveHours(date)
+  const [{ data: blocks }, { data: appointments }] = await Promise.all([
+    supabase
+      .from('schedule_blocks')
+      .select('*')
+      .eq('active', true)
+      .lte('date', date)
+      .or(`date_end.gte.${date},and(date.eq.${date},date_end.is.null)`),
+    supabase.from('appointments').select('*').eq('date', date).eq('status', 'scheduled'),
+  ])
+  return {
+    hours,
+    fromOverride,
+    blocks: (blocks ?? []) as ScheduleBlock[],
+    appointments: (appointments ?? []) as Appointment[],
+  }
+}
+
+export async function getDayGrid(date: string): Promise<{
+  grid?: GridSlot[]
+  hours?: EffectiveHours
+  fromOverride?: boolean
+  error?: string
+}> {
+  const authError = await requireAdmin()
+  if (authError) return authError
+
+  const { hours, fromOverride, blocks, appointments } = await loadDayData(date)
+  return { grid: computeDayGrid(date, hours, blocks, appointments), hours, fromOverride }
+}
+
+// One tap on a grid slot: aberto -> bloqueia; bloqueado -> reabre;
+// fechado -> estende o expediente do dia (gaps entram bloqueados).
+export async function toggleSlot(date: string, start: string): Promise<{
+  grid?: GridSlot[]
+  hours?: EffectiveHours
+  fromOverride?: boolean
+  error?: string
+}> {
+  const authError = await requireAdmin()
+  if (authError) return authError
+
+  const dateError = validateOverrideDate(date, todaySP())
+  if (dateError) return { error: dateError }
+  if (!isHalfHourStep(start)) return { error: 'Horário inválido.' }
+
+  const supabase = createAdminClient()
+  const { hours, blocks, appointments } = await loadDayData(date)
+  const grid = computeDayGrid(date, hours, blocks, appointments)
+  const slot = grid.find((s) => s.start === start)
+  if (!slot) return { error: 'Horário inválido.' }
+
+  const slotEndMin = timeToMinutes(start) + SLOT_MINUTES
+
+  if (slot.state === 'ocupado') {
+    return { error: 'Horário ocupado por um cliente.' }
+  }
+
+  if (slot.state === 'aberto') {
+    const { error } = await supabase.from('schedule_blocks').insert({
+      date,
+      date_end: null,
+      full_day: false,
+      start_time: start,
+      end_time: minutesToTime(slotEndMin),
+      reason: null,
+      active: true,
+    })
+    if (error) return { error: error.message }
+  }
+
+  if (slot.state === 'bloqueado') {
+    const covering = blocks.filter(
+      (b) =>
+        b.full_day ||
+        (b.start_time && b.end_time &&
+          timeToMinutes(start) < timeToMinutes(b.end_time) &&
+          slotEndMin > timeToMinutes(b.start_time)),
+    )
+    if (covering.some((b) => b.full_day || b.date_end)) {
+      return { error: 'Este horário faz parte de um bloqueio de dia inteiro ou período. Remova-o na lista de bloqueios.' }
+    }
+    for (const b of covering) {
+      const { error } = await supabase.from('schedule_blocks').update({ active: false }).eq('id', b.id)
+      if (error) return { error: error.message }
+      // Split: keep the other slots of a wider same-day block closed.
+      const inserts = []
+      for (let t = timeToMinutes(b.start_time!); t < timeToMinutes(b.end_time!); t += SLOT_MINUTES) {
+        if (t === timeToMinutes(start)) continue
+        inserts.push({
+          date,
+          date_end: null,
+          full_day: false,
+          start_time: minutesToTime(t),
+          end_time: minutesToTime(t + SLOT_MINUTES),
+          reason: b.reason,
+          active: true,
+        })
+      }
+      if (inserts.length > 0) {
+        const { error: splitError } = await supabase.from('schedule_blocks').insert(inserts)
+        if (splitError) return { error: splitError.message }
+      }
+    }
+  }
+
+  if (slot.state === 'fechado') {
+    const ext = computeExtension(hours, start)
+    const { error } = await supabase.from('day_overrides').upsert(
+      { date, open_time: ext.open, close_time: ext.close, updated_at: new Date().toISOString() },
+      { onConflict: 'date' },
+    )
+    if (error) return { error: error.message }
+    if (ext.gaps.length > 0) {
+      const { error: gapError } = await supabase.from('schedule_blocks').insert(
+        ext.gaps.map((g) => ({
+          date,
+          date_end: null,
+          full_day: false,
+          start_time: g,
+          end_time: minutesToTime(timeToMinutes(g) + SLOT_MINUTES),
+          reason: null,
+          active: true,
+        })),
+      )
+      if (gapError) return { error: gapError.message }
+    }
+  }
+
+  revalidateSchedulePages()
+  const fresh = await loadDayData(date)
+  return {
+    grid: computeDayGrid(date, fresh.hours, fresh.blocks, fresh.appointments),
+    hours: fresh.hours,
+    fromOverride: fresh.fromOverride,
+  }
 }

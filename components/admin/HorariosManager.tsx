@@ -4,21 +4,17 @@ import { useState, useTransition } from 'react'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { BloqueiosManager } from '@/components/admin/BloqueiosManager'
-import {
-  updateScheduleSettings,
-  upsertDayOverride,
-  removeDayOverride,
-  getDaySchedule,
-} from '@/actions/admin/schedule'
+import { updateScheduleSettings, getDayGrid, toggleSlot } from '@/actions/admin/schedule'
 import type { ScheduleSettings, ScheduleBlock } from '@/types'
 import type { EffectiveHours } from '@/lib/business-rules/slots'
+import type { GridSlot, SlotState } from '@/lib/schedule/grid'
 
 interface HorariosManagerProps {
   settings: ScheduleSettings
   blocks: ScheduleBlock[]
 }
 
-// 30-min options 06:00..23:30 for selects.
+// 30-min options 06:00..23:30 for the default-hours selects.
 const TIME_OPTIONS = Array.from({ length: 36 }, (_, i) => {
   const total = 6 * 60 + i * 30
   const h = String(Math.floor(total / 60)).padStart(2, '0')
@@ -26,19 +22,38 @@ const TIME_OPTIONS = Array.from({ length: 36 }, (_, i) => {
   return `${h}:${m}`
 })
 
-function TimeSelect({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
-  return (
-    <label className="flex flex-col gap-1 text-sm text-zinc-300">
-      {label}
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white"
-      >
-        {TIME_OPTIONS.map((t) => <option key={t} value={t}>{t}</option>)}
-      </select>
-    </label>
-  )
+const WEEKDAY_LABEL = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
+
+// Mon–Sat of the current week + Mon–Sat of the next week, as 'YYYY-MM-DD'.
+function editableDays(): { date: string; label: string; sub: string }[] {
+  const now = new Date()
+  const todayStr = now.toLocaleDateString('en-CA')
+  const dow = new Date(todayStr + 'T12:00:00Z').getUTCDay()
+  const monday = new Date(todayStr + 'T12:00:00Z')
+  monday.setUTCDate(monday.getUTCDate() + (dow === 0 ? 1 : 1 - dow))
+
+  const days: { date: string; label: string; sub: string }[] = []
+  for (let w = 0; w < 2; w++) {
+    for (let d = 0; d < 6; d++) {
+      const dt = new Date(monday)
+      dt.setUTCDate(monday.getUTCDate() + w * 7 + d)
+      const iso = dt.toISOString().slice(0, 10)
+      if (iso < todayStr) continue // past days of the current week
+      days.push({
+        date: iso,
+        label: WEEKDAY_LABEL[dt.getUTCDay()],
+        sub: String(dt.getUTCDate()).padStart(2, '0'),
+      })
+    }
+  }
+  return days
+}
+
+const SLOT_STYLE: Record<SlotState, string> = {
+  aberto: 'bg-amber-500/15 border-amber-500/60 text-amber-300',
+  bloqueado: 'bg-red-500/15 border-red-500/60 text-red-400 line-through',
+  fechado: 'bg-zinc-900 border-zinc-700 border-dashed text-zinc-500',
+  ocupado: 'bg-zinc-700 border-zinc-600 text-zinc-400 cursor-not-allowed',
 }
 
 export function HorariosManager({ settings, blocks }: HorariosManagerProps) {
@@ -49,14 +64,13 @@ export function HorariosManager({ settings, blocks }: HorariosManagerProps) {
   const [settingsMsg, setSettingsMsg] = useState<string | null>(null)
   const [settingsError, setSettingsError] = useState<string | null>(null)
 
-  // --- per-day card ---
-  const [day, setDay] = useState('')
+  // --- day grid ---
+  const days = editableDays()
+  const [day, setDay] = useState<string | null>(null)
+  const [grid, setGrid] = useState<GridSlot[] | null>(null)
   const [dayHours, setDayHours] = useState<EffectiveHours | null>(null)
   const [dayFromOverride, setDayFromOverride] = useState(false)
-  const [dayOpen, setDayOpen] = useState('10:00')
-  const [dayClose, setDayClose] = useState('20:00')
   const [dayError, setDayError] = useState<string | null>(null)
-  const [dayMsg, setDayMsg] = useState<string | null>(null)
 
   const [isPending, startTransition] = useTransition()
 
@@ -72,54 +86,52 @@ export function HorariosManager({ settings, blocks }: HorariosManagerProps) {
       })
       if (result.error) { setSettingsError(result.error); return }
       setSettingsMsg('Horário padrão salvo.')
+      // The default may change the selected day's grid — refresh it.
+      if (day) {
+        const fresh = await getDayGrid(day)
+        if (fresh.grid && fresh.hours) {
+          setGrid(fresh.grid)
+          setDayHours(fresh.hours)
+          setDayFromOverride(!!fresh.fromOverride)
+        }
+      }
     })
   }
 
-  function loadDay(date: string) {
+  function selectDay(date: string) {
     setDay(date)
     setDayError(null)
-    setDayMsg(null)
-    setDayHours(null)
-    if (!date) return
+    setGrid(null)
     startTransition(async () => {
-      const result = await getDaySchedule(date)
-      if (result.error || !result.hours) { setDayError(result.error ?? 'Erro ao carregar o dia.'); return }
+      const result = await getDayGrid(date)
+      if (result.error || !result.grid || !result.hours) {
+        setDayError(result.error ?? 'Erro ao carregar o dia.')
+        return
+      }
+      setGrid(result.grid)
       setDayHours(result.hours)
       setDayFromOverride(!!result.fromOverride)
-      setDayOpen(result.hours.start)
-      setDayClose(result.hours.end)
     })
   }
 
-  function saveDay(e: React.FormEvent) {
-    e.preventDefault()
+  function tapSlot(slot: GridSlot) {
+    if (!day || slot.state === 'ocupado' || isPending) return
     startTransition(async () => {
       setDayError(null)
-      setDayMsg(null)
-      const result = await upsertDayOverride({ date: day, open_time: dayOpen, close_time: dayClose })
-      if (result.error) { setDayError(result.error); return }
-      setDayMsg('Horário do dia salvo.')
-      setDayFromOverride(true)
-      setDayHours({ start: dayOpen, end: dayClose })
-    })
-  }
-
-  function resetDay() {
-    startTransition(async () => {
-      setDayError(null)
-      setDayMsg(null)
-      const result = await removeDayOverride(day)
-      if (result.error) { setDayError(result.error); return }
-      // Reload the day inline (loadDay would clear the success message).
-      const fresh = await getDaySchedule(day)
-      if (fresh.hours) {
-        setDayHours(fresh.hours)
-        setDayFromOverride(!!fresh.fromOverride)
-        setDayOpen(fresh.hours.start)
-        setDayClose(fresh.hours.end)
+      const result = await toggleSlot(day, slot.start)
+      if (result.error || !result.grid || !result.hours) {
+        setDayError(result.error ?? 'Erro ao atualizar o horário.')
+        return
       }
-      setDayMsg('Dia voltou ao horário padrão.')
+      setGrid(result.grid)
+      setDayHours(result.hours)
+      setDayFromOverride(!!result.fromOverride)
     })
+  }
+
+  function fullDate(date: string): string {
+    const [y, m, d] = date.split('-')
+    return `${d}/${m}/${y}`
   }
 
   return (
@@ -129,8 +141,26 @@ export function HorariosManager({ settings, blocks }: HorariosManagerProps) {
         <h2 className="text-lg font-semibold text-amber-500">Horário padrão</h2>
         <p className="text-zinc-400 text-sm">Vale para todos os dias sem ajuste específico.</p>
         <div className="grid grid-cols-2 gap-3">
-          <TimeSelect label="Abertura" value={open} onChange={setOpen} />
-          <TimeSelect label="Fechamento" value={close} onChange={setClose} />
+          <label className="flex flex-col gap-1 text-sm text-zinc-300">
+            Abertura
+            <select
+              value={open}
+              onChange={(e) => setOpen(e.target.value)}
+              className="bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white"
+            >
+              {TIME_OPTIONS.map((t) => <option key={t} value={t}>{t}</option>)}
+            </select>
+          </label>
+          <label className="flex flex-col gap-1 text-sm text-zinc-300">
+            Fechamento
+            <select
+              value={close}
+              onChange={(e) => setClose(e.target.value)}
+              className="bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white"
+            >
+              {TIME_OPTIONS.map((t) => <option key={t} value={t}>{t}</option>)}
+            </select>
+          </label>
         </div>
         <Input
           label="Antecedência mínima (minutos)"
@@ -150,43 +180,81 @@ export function HorariosManager({ settings, blocks }: HorariosManagerProps) {
         <Button type="submit" loading={isPending}>Salvar</Button>
       </form>
 
-      {/* Ajustes por dia */}
-      <div className="bg-zinc-800 rounded-xl p-4 space-y-3">
-        <h2 className="text-lg font-semibold text-amber-500">Ajustar um dia específico</h2>
-        <p className="text-zinc-400 text-sm">
-          Mude a abertura/fechamento de um único dia (ex.: sexta até 21:00) sem afetar os demais.
-        </p>
-        <Input label="Dia" name="day" type="date" value={day} onChange={(e) => loadDay(e.target.value)} />
-        {day && dayHours && (
-          <form onSubmit={saveDay} className="space-y-3">
+      {/* Grade por dia */}
+      <div className="bg-zinc-800 rounded-xl p-4 space-y-4">
+        <div>
+          <h2 className="text-lg font-semibold text-amber-500">Ajustar dias</h2>
+          <p className="text-zinc-400 text-sm">
+            Escolha o dia e toque nos horários: bloqueie, reabra ou adicione horários fora do expediente.
+          </p>
+        </div>
+
+        {/* Day buttons: current + next week */}
+        <div className="grid grid-cols-6 gap-2">
+          {days.map((d) => (
+            <button
+              key={d.date}
+              type="button"
+              onClick={() => selectDay(d.date)}
+              className={`flex flex-col items-center rounded-lg border px-1 py-2 text-sm transition-colors ${
+                day === d.date
+                  ? 'bg-amber-500 border-amber-500 text-zinc-900 font-semibold'
+                  : 'bg-zinc-900 border-zinc-700 text-zinc-300 hover:border-amber-500/60'
+              }`}
+            >
+              <span>{d.label}</span>
+              <span className="text-xs">{d.sub}</span>
+            </button>
+          ))}
+        </div>
+
+        {day && (
+          <div className="space-y-3">
             <p className="text-zinc-300 text-sm">
-              Horário atual: <span className="text-white font-medium">{dayHours.start} – {dayHours.end}</span>
-              {dayFromOverride ? ' (ajuste deste dia)' : ' (horário padrão)'}
+              {fullDate(day)} — expediente{' '}
+              <span className="text-white font-medium">
+                {dayHours ? `${dayHours.start} – ${dayHours.end}` : '…'}
+              </span>
+              {dayFromOverride ? ' (ajustado)' : ''}
             </p>
-            <div className="grid grid-cols-2 gap-3">
-              <TimeSelect label="Abertura" value={dayOpen} onChange={setDayOpen} />
-              <TimeSelect label="Fechamento" value={dayClose} onChange={setDayClose} />
-            </div>
+
             {dayError && <p className="text-red-400 text-sm">{dayError}</p>}
-            {dayMsg && <p className="text-green-400 text-sm">{dayMsg}</p>}
-            <div className="flex gap-2">
-              <Button type="submit" loading={isPending}>Salvar horário do dia</Button>
-              {dayFromOverride && (
-                <Button type="button" variant="secondary" onClick={resetDay} disabled={isPending}>
-                  Voltar ao padrão
-                </Button>
-              )}
-            </div>
-          </form>
+
+            {!grid && !dayError && <p className="text-zinc-400 text-sm">Carregando horários…</p>}
+
+            {grid && (
+              <>
+                <div className={`grid grid-cols-4 gap-2 ${isPending ? 'opacity-60 pointer-events-none' : ''}`}>
+                  {grid.map((slot) => (
+                    <button
+                      key={slot.start}
+                      type="button"
+                      onClick={() => tapSlot(slot)}
+                      disabled={slot.state === 'ocupado'}
+                      data-state={slot.state}
+                      className={`rounded-lg border px-2 py-2 text-sm font-medium transition-colors ${SLOT_STYLE[slot.state]}`}
+                    >
+                      {slot.start}
+                    </button>
+                  ))}
+                </div>
+                <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-zinc-400">
+                  <span><span className="text-amber-300">■</span> aberto — toque para bloquear</span>
+                  <span><span className="text-red-400">■</span> bloqueado — toque para reabrir</span>
+                  <span><span className="text-zinc-500">■</span> fechado — toque para adicionar</span>
+                  <span><span className="text-zinc-300">■</span> ocupado (cliente)</span>
+                </div>
+              </>
+            )}
+          </div>
         )}
-        {day && !dayHours && dayError && <p className="text-red-400 text-sm">{dayError}</p>}
       </div>
 
       {/* Bloqueios */}
       <div className="space-y-2">
-        <h2 className="text-lg font-semibold text-amber-500">Bloqueios</h2>
+        <h2 className="text-lg font-semibold text-amber-500">Bloqueios de dia inteiro e períodos</h2>
         <p className="text-zinc-400 text-sm">
-          Feche o dia inteiro ou faixas de horário (almoço, compromissos, férias).
+          Para fechar um dia inteiro ou um período (ex.: férias). Faixas de horário você faz na grade acima.
         </p>
         <BloqueiosManager blocks={blocks} />
       </div>

@@ -13,18 +13,28 @@ async function deleteTempAdmin() {
   if (u) await admin.auth.admin.deleteUser(u.id)
 }
 
-// Next Friday strictly after today (always a valid override target).
-function nextFriday(): string {
+// Saturday of NEXT week: always in the day buttons, and far enough out that
+// the live project has no real data there.
+function nextWeekSaturday(): string {
   const now = new Date()
-  const d = new Date(now)
-  d.setDate(now.getDate() + (((5 - now.getDay() + 7) % 7) || 7))
-  return d.toLocaleDateString('en-CA')
+  const todayStr = now.toLocaleDateString('en-CA')
+  const d = new Date(todayStr + 'T12:00:00Z')
+  const dow = d.getUTCDay()
+  d.setUTCDate(d.getUTCDate() + (dow === 0 ? 1 : 1 - dow) + 7 + 5) // next week's Monday + 5
+  return d.toISOString().slice(0, 10)
+}
+
+async function cleanupGridDay() {
+  const admin = adminClient()
+  const date = nextWeekSaturday()
+  await admin.from('day_overrides').delete().eq('date', date)
+  await admin.from('schedule_blocks').delete().eq('date', date).is('date_end', null)
 }
 
 test.beforeAll(async () => {
   await cleanupTestUsers()
   await deleteTempAdmin()
-  await adminClient().from('day_overrides').delete().eq('date', nextFriday())
+  await cleanupGridDay()
   const { error } = await adminClient().auth.admin.createUser({
     email: ADMIN_EMAIL,
     password: ADMIN_PASSWORD,
@@ -36,13 +46,12 @@ test.beforeAll(async () => {
 })
 
 test.afterAll(async () => {
-  // Remove any override the test created, then the temp admin.
-  await adminClient().from('day_overrides').delete().eq('date', nextFriday())
+  await cleanupGridDay()
   await cleanupTestUsers()
   await deleteTempAdmin()
 })
 
-test('admin edits default hours and a specific day', async ({ page }) => {
+test('admin edits default hours and toggles slots on the visual grid', async ({ page }) => {
   await page.goto('/admin/login')
   await page.getByLabel('E-mail').fill(ADMIN_EMAIL)
   await page.getByLabel('Senha').fill(ADMIN_PASSWORD)
@@ -52,26 +61,31 @@ test('admin edits default hours and a specific day', async ({ page }) => {
   await page.goto('/admin/horarios')
   await expect(page.getByRole('heading', { name: 'Horários' })).toBeVisible()
 
-  // Default card shows the seeded settings.
+  // Default card round-trip.
   await expect(page.getByText('Horário padrão', { exact: true })).toBeVisible()
-
-  // Save settings unchanged (round-trip works).
   await page.getByRole('button', { name: 'Salvar', exact: true }).click()
   await expect(page.getByText('Horário padrão salvo.')).toBeVisible({ timeout: 15_000 })
 
-  // Per-day override on next Friday: open 09:00.
-  const friday = nextFriday()
-  await page.getByLabel('Dia').fill(friday)
-  await expect(page.getByText(/Horário atual:/)).toBeVisible({ timeout: 15_000 })
-  // TimeSelect nests the <select> inside its <label>, so getByLabel works.
-  // The day form is the second form on the page (first = default hours card).
-  await page.locator('form').nth(1).getByLabel('Abertura').selectOption('09:00')
-  await page.getByRole('button', { name: 'Salvar horário do dia' }).click()
-  await expect(page.getByText('Horário do dia salvo.')).toBeVisible({ timeout: 15_000 })
+  // Pick next week's Saturday (last day button) — clean of real data.
+  await page.locator('button', { hasText: /^Sáb/ }).last().click()
 
-  // Reset to default.
-  await page.getByRole('button', { name: 'Voltar ao padrão' }).click()
-  await expect(page.getByText('Dia voltou ao horário padrão.')).toBeVisible({ timeout: 15_000 })
+  const slot = (time: string) => page.locator(`button[data-state]`, { hasText: time })
+
+  // Grid loads with the default hours: 10:00 aberto, 09:30 fechado.
+  await expect(slot('10:00')).toHaveAttribute('data-state', 'aberto', { timeout: 15_000 })
+  await expect(slot('09:30')).toHaveAttribute('data-state', 'fechado')
+
+  // Tap 10:00 -> blocks it. Tap again -> reopens.
+  await slot('10:00').click()
+  await expect(slot('10:00')).toHaveAttribute('data-state', 'bloqueado', { timeout: 15_000 })
+  await slot('10:00').click()
+  await expect(slot('10:00')).toHaveAttribute('data-state', 'aberto', { timeout: 15_000 })
+
+  // Tap 09:00 (fechado) -> adds it; the 09:30 gap slot comes back blocked.
+  await slot('09:00').click()
+  await expect(slot('09:00')).toHaveAttribute('data-state', 'aberto', { timeout: 15_000 })
+  await expect(slot('09:30')).toHaveAttribute('data-state', 'bloqueado')
+  await expect(page.getByText('(ajustado)')).toBeVisible()
 
   // Old route redirects.
   await page.goto('/admin/bloqueios')
