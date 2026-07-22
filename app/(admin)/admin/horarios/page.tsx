@@ -5,17 +5,18 @@ import { HorariosManager } from '@/components/admin/HorariosManager'
 import type { ScheduleBlock } from '@/types'
 
 export default async function HorariosPage() {
-  const settings = await getScheduleSettings()
-
   const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
   const supabase = await createClient()
-  const { data } = await supabase
-    .from('schedule_blocks')
-    .select('*')
-    .gte('date', today)
-    .order('date')
-    .eq('active', true)
-    .eq('kind', 'bloqueio') // grid-managed "fechado" rows stay out of the list
+  const [settings, { data }] = await Promise.all([
+    getScheduleSettings(),
+    supabase
+      .from('schedule_blocks')
+      .select('*')
+      .gte('date', today)
+      .order('date')
+      .eq('active', true)
+      .eq('kind', 'bloqueio'), // grid-managed "fechado" rows stay out of the list
+  ])
   const blocks: ScheduleBlock[] = data ?? []
 
   return (

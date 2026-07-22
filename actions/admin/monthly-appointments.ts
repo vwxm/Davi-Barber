@@ -2,7 +2,6 @@
 
 import { createAdminClient } from '@/lib/supabase/admin'
 import { requireAdmin } from '@/lib/supabase/require-admin'
-import { syncAppointmentEvent } from '@/lib/google-calendar/sync-appointment'
 import { CLOSED_WEEKDAYS, timeToMinutes, minutesToTime } from '@/lib/business-rules/slots'
 import { getEffectiveHours } from '@/lib/schedule/settings'
 import { currentWeekMonday } from '@/lib/business-rules/monthly'
@@ -71,9 +70,6 @@ export async function rescheduleMonthlyAppointment(
     .update({ date: newDate, start_time: start, end_time: end })
     .eq('id', appointmentId)
   if (updateError) return { error: updateError.message }
-
-  // Re-sync calendar (patches the existing event if already synced).
-  await syncAppointmentEvent(appointmentId).catch(() => {})
 
   return {}
 }

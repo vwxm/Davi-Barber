@@ -70,20 +70,19 @@ export async function resetClientPassword(
     return { error: 'A senha deve ter pelo menos 8 caracteres.' }
   }
 
-  const email = phoneToEmail(phone)
   const supabase = createAdminClient()
 
-  // Find the auth user by the deterministic phone-derived email.
-  const { data: list, error: listError } = await supabase.auth.admin.listUsers({
-    page: 1,
-    perPage: 1000,
-  })
-  if (listError) return { error: 'Erro ao buscar usuários.' }
+  // clients.id = auth.users.id and phone is unique/indexed, so this is a
+  // single indexed lookup instead of scanning every auth user by email.
+  const { data: client, error: clientError } = await supabase
+    .from('clients')
+    .select('id')
+    .eq('phone', normalizePhone(phone))
+    .maybeSingle()
+  if (clientError) return { error: 'Erro ao buscar cliente.' }
+  if (!client) return { error: 'Cliente não encontrado com esse telefone.' }
 
-  const user = list.users.find((u) => u.email === email)
-  if (!user) return { error: 'Cliente não encontrado com esse telefone.' }
-
-  const { error } = await supabase.auth.admin.updateUserById(user.id, {
+  const { error } = await supabase.auth.admin.updateUserById(client.id, {
     password: newPassword,
   })
   if (error) return { error: 'Erro ao redefinir a senha.' }

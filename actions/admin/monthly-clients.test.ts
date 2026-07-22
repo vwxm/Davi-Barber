@@ -9,7 +9,6 @@ vi.mock('@/lib/supabase/require-admin', () => ({ requireAdmin: () => requireAdmi
 // Heavy side-effect deps stubbed out.
 vi.mock('@/lib/supabase/admin', () => ({ createAdminClient: vi.fn() }))
 vi.mock('@/lib/monthly/ensure', () => ({ ensureCurrentWeekMonthlyAppointments: vi.fn() }))
-vi.mock('@/lib/google-calendar/sync', () => ({ deleteCalendarEvent: vi.fn() }))
 
 import { createMonthlyClient } from './monthly-clients'
 

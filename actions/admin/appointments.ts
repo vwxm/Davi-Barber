@@ -2,8 +2,6 @@
 
 import { createAdminClient } from '@/lib/supabase/admin'
 import { requireAdmin } from '@/lib/supabase/require-admin'
-import { deleteCalendarEvent } from '@/lib/google-calendar/sync'
-import { syncAppointmentEvent } from '@/lib/google-calendar/sync-appointment'
 import { CLOSED_WEEKDAYS, timeToMinutes, minutesToTime } from '@/lib/business-rules/slots'
 import { getEffectiveHours } from '@/lib/schedule/settings'
 import type { AppointmentStatus } from '@/types'
@@ -59,7 +57,7 @@ export async function createGuestAppointment(data: {
   const { end, error: slotError } = await validateSlot(data.date, data.start_time, service.duration_minutes)
   if (slotError) return { error: slotError }
 
-  const { data: inserted, error } = await supabase
+  const { error } = await supabase
     .from('appointments')
     .insert({
       client_id: null,
@@ -72,15 +70,12 @@ export async function createGuestAppointment(data: {
       status: 'scheduled',
       access_code: accessCode(),
     })
-    .select('id')
-    .single()
 
   if (error) {
     if ((error as { code?: string }).code === '23P01') return { error: 'Horário indisponível nesse dia.' }
     return { error: 'Erro ao criar agendamento.' }
   }
 
-  if (inserted) await syncAppointmentEvent(inserted.id).catch(() => {})
   return {}
 }
 
@@ -117,7 +112,6 @@ export async function rescheduleAppointmentAdmin(
     return { error: 'Erro ao remarcar.' }
   }
 
-  await syncAppointmentEvent(appointmentId).catch(() => {})
   return {}
 }
 
@@ -167,20 +161,11 @@ export async function cancelAppointmentAdmin(
     .update({ status: 'canceled' })
     .eq('id', appointmentId)
     .eq('status', 'scheduled')
-    .select('id, google_event_id')
+    .select('id')
 
   if (error) return { error: error.message }
   if (!data || data.length === 0) {
     return { error: 'Agendamento não encontrado ou não está agendado.' }
-  }
-
-  const googleEventId = data[0].google_event_id
-  if (googleEventId) {
-    await deleteCalendarEvent(googleEventId).catch(() => {})
-    await supabase
-      .from('appointments')
-      .update({ google_event_id: null, sync_status: 'pending', sync_error: null })
-      .eq('id', appointmentId)
   }
 
   return {}

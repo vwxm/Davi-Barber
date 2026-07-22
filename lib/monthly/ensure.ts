@@ -1,6 +1,5 @@
 import 'server-only'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { syncAppointmentEvent } from '@/lib/google-calendar/sync-appointment'
 import { timeToMinutes, minutesToTime, TIMEZONE } from '@/lib/business-rules/slots'
 import { currentWeekMonday, addDays } from '@/lib/business-rules/monthly'
 import { BOOKING_WEEKS } from '@/lib/business-rules/booking-window'
@@ -28,6 +27,11 @@ interface MonthlyRow {
 
 // Idempotently materialize the current week's appointment for each active
 // monthly client. Safe to call on any read path. Never throws.
+//
+// Reads are batched per week (existing materializations + same-week
+// appointments fetched once, not once per monthly client) so a call that has
+// nothing new to generate — the common case — costs a small, constant number
+// of round trips regardless of how many monthly clients exist.
 export async function ensureCurrentWeekMonthlyAppointments(): Promise<{
   generated: number
   conflicts: string[]
@@ -41,17 +45,48 @@ export async function ensureCurrentWeekMonthlyAppointments(): Promise<{
     const baseMonday = currentWeekMonday(nowISO)
     const today = new Date().toLocaleDateString('en-CA', { timeZone: TIMEZONE })
 
-    const { data: monthlyClients } = await supabase
+    const { data: monthlyClientsData } = await supabase
       .from('monthly_clients')
       .select('id, client_id, service_id, weekday, start_time, active, service:services(duration_minutes)')
       .eq('active', true)
+    const monthlyClients = (monthlyClientsData ?? []) as unknown as MonthlyRow[]
+    if (monthlyClients.length === 0) return { generated: 0, conflicts: [] }
+
+    const mcIds = monthlyClients.map((mc) => mc.id)
 
     // Materialize each bookable week (current + next), one occurrence per
     // (monthly client, week).
     for (let w = 0; w < BOOKING_WEEKS; w++) {
       const weekMonday = addDays(baseMonday, w * 7)
+      const weekSaturday = addDays(weekMonday, 5)
 
-      for (const mc of (monthlyClients ?? []) as unknown as MonthlyRow[]) {
+      // One query for every monthly client already materialized this week,
+      // instead of one query per client.
+      const { data: existingRows } = await supabase
+        .from('appointments')
+        .select('monthly_client_id')
+        .in('monthly_client_id', mcIds)
+        .eq('week_start', weekMonday)
+      const alreadyMaterialized = new Set((existingRows ?? []).map((r) => r.monthly_client_id))
+
+      // One query for every scheduled appointment across the whole week,
+      // instead of one query per client per day.
+      const { data: weekAppointments } = await supabase
+        .from('appointments')
+        .select('date, start_time, end_time')
+        .eq('status', 'scheduled')
+        .gte('date', weekMonday)
+        .lte('date', weekSaturday)
+      const byDate = new Map<string, { start_time: string; end_time: string }[]>()
+      for (const a of weekAppointments ?? []) {
+        const list = byDate.get(a.date) ?? []
+        list.push(a)
+        byDate.set(a.date, list)
+      }
+
+      for (const mc of monthlyClients) {
+        if (alreadyMaterialized.has(mc.id)) continue
+
         const duration = mc.service?.duration_minutes
         if (!duration) continue
 
@@ -60,25 +95,10 @@ export async function ensureCurrentWeekMonthlyAppointments(): Promise<{
         const date = addDays(weekMonday, offset)
         if (date < today) continue // occurrence already passed
 
-        // Already materialized for this week?
-        const { data: existing } = await supabase
-          .from('appointments')
-          .select('id')
-          .eq('monthly_client_id', mc.id)
-          .eq('week_start', weekMonday)
-          .maybeSingle()
-        if (existing) continue
-
         const start = minutesToTime(timeToMinutes(mc.start_time))
         const end = minutesToTime(timeToMinutes(mc.start_time) + duration)
 
-        // Conflict with an existing scheduled appointment on that date?
-        const { data: sameDay } = await supabase
-          .from('appointments')
-          .select('start_time, end_time')
-          .eq('date', date)
-          .eq('status', 'scheduled')
-        const conflict = (sameDay ?? []).some((a) =>
+        const conflict = (byDate.get(date) ?? []).some((a) =>
           rangesOverlap(start, end, a.start_time, a.end_time),
         )
         if (conflict) {
@@ -105,9 +125,13 @@ export async function ensureCurrentWeekMonthlyAppointments(): Promise<{
         // Unique/overlap violation (race or conflict): skip.
         if (error) continue
 
-        generated++
         if (inserted) {
-          await syncAppointmentEvent(inserted.id).catch(() => {})
+          generated++
+          // Keep this week's conflict check accurate for the remaining
+          // monthly clients processed in this same loop.
+          const list = byDate.get(date) ?? []
+          list.push({ start_time: start, end_time: end })
+          byDate.set(date, list)
         }
       }
     }

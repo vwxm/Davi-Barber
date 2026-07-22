@@ -1,9 +1,7 @@
 export const dynamic = 'force-dynamic'
 import { createClient } from '@/lib/supabase/server'
 import type { Appointment } from '@/types'
-import { SyncButton } from '@/components/admin/SyncButton'
 import { AppointmentActions } from '@/components/admin/AppointmentActions'
-import { RetrySyncButton } from '@/components/admin/RetrySyncButton'
 import { ensureCurrentWeekMonthlyAppointments } from '@/lib/monthly/ensure'
 
 function formatPhone(phone: string): string {
@@ -46,13 +44,6 @@ export default async function AdminDashboardPage() {
   await ensureCurrentWeekMonthlyAppointments()
   const supabase = await createClient()
 
-  const { data: { user } } = await supabase.auth.getUser()
-  const userName =
-    (user?.user_metadata?.name as string | undefined) ??
-    user?.email ??
-    'Admin'
-  const firstName = userName.split(' ')[0] ?? userName
-
   const today = getTodayBR()
   const { start: weekStart, end: weekEnd } = getWeekRangeBR()
 
@@ -62,35 +53,35 @@ export default async function AdminDashboardPage() {
   const hourSP = nowSP.getHours()
   const greeting = getGreeting(hourSP)
 
-  // Today's appointments
-  const { data: todayAppointments } = await supabase
-    .from('appointments')
-    .select('*, service:services(id,name), client:clients(id,name,phone)')
-    .eq('date', today)
-    .eq('status', 'scheduled')
-    .order('start_time', { ascending: true })
+  const [
+    { data: { user } },
+    { data: todayAppointments },
+    { count: weekCount },
+    { count: clientsCount },
+  ] = await Promise.all([
+    supabase.auth.getUser(),
+    supabase
+      .from('appointments')
+      .select('*, service:services(id,name), client:clients(id,name,phone)')
+      .eq('date', today)
+      .eq('status', 'scheduled')
+      .order('start_time', { ascending: true }),
+    supabase
+      .from('appointments')
+      .select('id', { count: 'exact', head: true })
+      .eq('status', 'scheduled')
+      .gte('date', weekStart)
+      .lte('date', weekEnd),
+    supabase.from('clients').select('id', { count: 'exact', head: true }),
+  ])
+
+  const userName =
+    (user?.user_metadata?.name as string | undefined) ??
+    user?.email ??
+    'Admin'
+  const firstName = userName.split(' ')[0] ?? userName
 
   const appointments = (todayAppointments ?? []) as Appointment[]
-
-  // This week's scheduled count
-  const { count: weekCount } = await supabase
-    .from('appointments')
-    .select('id', { count: 'exact', head: true })
-    .eq('status', 'scheduled')
-    .gte('date', weekStart)
-    .lte('date', weekEnd)
-
-  // Total clients count
-  const { count: clientsCount } = await supabase
-    .from('clients')
-    .select('id', { count: 'exact', head: true })
-
-  // Appointments whose calendar sync failed
-  const { count: syncErrorCount } = await supabase
-    .from('appointments')
-    .select('id', { count: 'exact', head: true })
-    .eq('sync_status', 'error')
-    .eq('status', 'scheduled')
 
   return (
     <div className="max-w-3xl mx-auto">
@@ -114,13 +105,6 @@ export default async function AdminDashboardPage() {
           <p className="text-zinc-400 text-sm mt-1">Clientes</p>
         </div>
       </div>
-
-      {/* Calendar sync failures */}
-      {(syncErrorCount ?? 0) > 0 && (
-        <div className="mb-6">
-          <RetrySyncButton count={syncErrorCount ?? 0} />
-        </div>
-      )}
 
       {/* Today's appointments */}
       <div>
@@ -151,11 +135,6 @@ export default async function AdminDashboardPage() {
                   <p className="text-zinc-500 text-xs">
                     {(appt.client?.phone ?? appt.guest_phone) ? formatPhone((appt.client?.phone ?? appt.guest_phone)!) : '—'}
                   </p>
-                  <SyncButton
-                    appointmentId={appt.id}
-                    syncStatus={appt.sync_status}
-                    googleEventId={appt.google_event_id}
-                  />
                   <AppointmentActions appointmentId={appt.id} />
                 </div>
               </div>

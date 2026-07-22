@@ -10,7 +10,6 @@ function appt(partial: Partial<Appointment>): Appointment {
     id: 'a', client_id: 'c', service_id: 's', date: DATE,
     start_time: '10:00', end_time: '10:30', status: 'scheduled',
     access_code: 'X', monthly_client_id: null, week_start: null,
-    google_event_id: null, sync_status: 'pending', sync_error: null,
     created_at: '', updated_at: '',
   } as Appointment
 }

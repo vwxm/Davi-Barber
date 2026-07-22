@@ -28,12 +28,10 @@ export async function getEffectiveHours(date: string): Promise<{
   settings: ScheduleSettings
 }> {
   const supabase = createAdminClient()
-  const settings = await getScheduleSettings()
-  const { data: override } = await supabase
-    .from('day_overrides')
-    .select('*')
-    .eq('date', date)
-    .maybeSingle()
+  const [settings, { data: override }] = await Promise.all([
+    getScheduleSettings(),
+    supabase.from('day_overrides').select('*').eq('date', date).maybeSingle(),
+  ])
 
   if (override) {
     return {

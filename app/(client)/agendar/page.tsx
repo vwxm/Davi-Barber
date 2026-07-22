@@ -8,16 +8,17 @@ import type { Service } from '@/types'
 export default async function AgendarPage() {
   const supabase = await createClient()
 
-  const { data: authData } = await supabase.auth.getUser()
+  const [{ data: authData }, { data: services }] = await Promise.all([
+    supabase.auth.getUser(),
+    supabase
+      .from('services')
+      .select('id, name, price, duration_minutes, active, created_at, updated_at')
+      .eq('active', true)
+      .order('name'),
+  ])
   if (!authData.user) {
     redirect('/login')
   }
-
-  const { data: services } = await supabase
-    .from('services')
-    .select('id, name, price, duration_minutes, active, created_at, updated_at')
-    .eq('active', true)
-    .order('name')
 
   const availableDates = getBookingWeekDates()
 

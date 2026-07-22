@@ -1,15 +1,14 @@
 # Davi Barber - Sistema de Agendamento
 
-Sistema web para barbearia com Supabase, Vercel, agenda inteligente, painel administrativo, mensalistas, bloqueios semanais e integração com Google Agenda.
+Sistema web para barbearia com Supabase, Vercel, agenda inteligente, painel administrativo, mensalistas e bloqueios semanais.
 
 ## Arquitetura
 
 - `Next.js`: frontend e rotas server-side para Vercel.
 - `Supabase`: Postgres, dados do sistema e RLS ativado.
-- `Google Calendar API`: criação de eventos no Google Agenda pelo servidor.
 - `ADMIN_ACCESS_TOKEN`: token simples para login administrativo em `/admin/login`.
 
-As chaves sensíveis ficam no servidor. O navegador não recebe `SUPABASE_SERVICE_ROLE_KEY`, chave privada do Google ou token administrativo.
+As chaves sensíveis ficam no servidor. O navegador não recebe `SUPABASE_SERVICE_ROLE_KEY` nem token administrativo.
 
 ## Regras implementadas
 
@@ -27,7 +26,6 @@ As chaves sensíveis ficam no servidor. O navegador não recebe `SUPABASE_SERVIC
 - O barbeiro pode cadastrar clientes mensalistas.
 - O barbeiro pode bloquear dia inteiro ou horários específicos da semana.
 - Por padrão, bloqueios só podem ser criados no domingo.
-- Ao confirmar agendamento, o sistema tenta criar evento no Google Agenda.
 
 ## Configurar Supabase
 
@@ -48,34 +46,11 @@ NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
 ADMIN_ACCESS_TOKEN=
-GOOGLE_CALENDAR_ID=
-GOOGLE_CLIENT_EMAIL=
-GOOGLE_PRIVATE_KEY=
 BARBERSHOP_TIMEZONE=America/Sao_Paulo
 ALLOW_BLOCKS_OUTSIDE_SUNDAY=false
 ```
 
 `ADMIN_ACCESS_TOKEN` deve ser um valor longo e difícil de adivinhar. O barbeiro entra por `/admin/login`; o cliente entra por `/login`.
-
-## Google Agenda
-
-A integração usa uma conta de serviço do Google Cloud:
-
-1. Ative a Google Calendar API no projeto Google Cloud.
-2. Crie uma Service Account.
-3. Gere uma chave JSON.
-4. Compartilhe o calendário da barbearia com o email da Service Account.
-5. Preencha `GOOGLE_CLIENT_EMAIL`, `GOOGLE_PRIVATE_KEY` e `GOOGLE_CALENDAR_ID`.
-6. Em `.env.local`, mantenha a chave privada em uma linha usando `\n`, por exemplo:
-
-```env
-GOOGLE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
-```
-
-`GOOGLE_CALENDAR_ID` pode ser o email do calendário principal ou o ID de um calendário específico. Depois de configurar, reinicie `npm run dev`.
-
-O Google Calendar API cria eventos pelo endpoint oficial `events.insert`.
-Quando um agendamento é cancelado no painel, o sistema tenta remover o evento correspondente do Google Agenda.
 
 ## Rodar localmente
 

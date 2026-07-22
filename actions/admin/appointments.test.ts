@@ -8,9 +8,6 @@ vi.mock('@/lib/supabase/require-admin', () => ({ requireAdmin: () => requireAdmi
 const createAdminClient = vi.fn()
 vi.mock('@/lib/supabase/admin', () => ({ createAdminClient: () => createAdminClient() }))
 
-const deleteCalendarEvent = vi.fn(async () => ({}))
-vi.mock('@/lib/google-calendar/sync', () => ({ deleteCalendarEvent: () => deleteCalendarEvent() }))
-
 import {
   markAppointmentCompleted,
   markAppointmentNoShow,
@@ -56,11 +53,10 @@ describe('markAppointmentNoShow', () => {
 })
 
 describe('cancelAppointmentAdmin', () => {
-  it('cancels without touching the calendar when there is no event', async () => {
-    createAdminClient.mockReturnValue(makeChain({ data: [{ id: 'a1', google_event_id: null }], error: null }))
+  it('cancels a scheduled appointment', async () => {
+    createAdminClient.mockReturnValue(makeChain({ data: [{ id: 'a1' }], error: null }))
     const result = await cancelAppointmentAdmin('a1')
     expect(result).toEqual({})
-    expect(deleteCalendarEvent).not.toHaveBeenCalled()
   })
 
   it('blocks non-admins', async () => {

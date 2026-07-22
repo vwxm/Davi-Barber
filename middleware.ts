@@ -1,7 +1,27 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
+function needsAuthCheck(pathname: string): boolean {
+  const isAdminRoute = pathname === '/admin' || pathname.startsWith('/admin/')
+  const isAdminLogin = pathname.startsWith('/admin/login')
+  return (
+    (isAdminRoute && !isAdminLogin) ||
+    pathname.startsWith('/agendamentos') ||
+    pathname.startsWith('/perfil') ||
+    pathname === '/login' ||
+    pathname === '/cadastro'
+  )
+}
+
 export async function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl
+
+  // Most routes (the booking page, admin login) don't gate on auth state, so
+  // skip the Supabase round trip entirely instead of doing it on every request.
+  if (!needsAuthCheck(pathname)) {
+    return NextResponse.next({ request })
+  }
+
   let supabaseResponse = NextResponse.next({ request })
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -25,10 +45,9 @@ export async function middleware(request: NextRequest) {
   })
 
   const { data: { user } } = await supabase.auth.getUser()
-  const { pathname } = request.nextUrl
 
   // Admin routes: require admin role in app_metadata
-  if ((pathname === '/admin' || pathname.startsWith('/admin/')) && !pathname.startsWith('/admin/login')) {
+  if (pathname === '/admin' || pathname.startsWith('/admin/')) {
     if (!user) {
       return NextResponse.redirect(new URL('/admin/login', request.url))
     }

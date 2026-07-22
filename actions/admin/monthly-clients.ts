@@ -3,7 +3,6 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { requireAdmin } from '@/lib/supabase/require-admin'
 import { ensureCurrentWeekMonthlyAppointments } from '@/lib/monthly/ensure'
-import { deleteCalendarEvent } from '@/lib/google-calendar/sync'
 import { MonthlyClient } from '@/types'
 
 export async function createMonthlyClient(data: {
@@ -69,20 +68,15 @@ export async function deactivateMonthlyClient(id: string): Promise<{ error?: str
   const supabase = createAdminClient()
   const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
 
-  // Remove this client's future generated appointments (and their calendar
-  // events) so nothing lingers after they stop being a monthly client.
+  // Remove this client's future generated appointments so nothing lingers
+  // after they stop being a monthly client.
   const { data: future } = await supabase
     .from('appointments')
-    .select('id, google_event_id')
+    .select('id')
     .eq('monthly_client_id', id)
     .eq('status', 'scheduled')
     .gte('date', today)
 
-  for (const appt of future ?? []) {
-    if (appt.google_event_id) {
-      await deleteCalendarEvent(appt.google_event_id).catch(() => {})
-    }
-  }
   if (future && future.length > 0) {
     await supabase.from('appointments').delete().in('id', future.map((a) => a.id))
   }

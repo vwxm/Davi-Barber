@@ -1,12 +1,11 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { getAvailableSlots, blockCoversDate } from '@/lib/business-rules/slots'
 import { ensureCurrentWeekMonthlyAppointments } from '@/lib/monthly/ensure'
 import { isDateInBookingWindow } from '@/lib/business-rules/booking-window'
 import { getEffectiveHours } from '@/lib/schedule/settings'
-import { syncAppointmentEvent } from '@/lib/google-calendar/sync-appointment'
-import { deleteCalendarEvent } from '@/lib/google-calendar/sync'
 import type { Appointment, TimeSlot, BookingInput, ScheduleBlock } from '@/types'
 
 export async function getAvailableSlotsForDate(
@@ -22,7 +21,13 @@ export async function getAvailableSlotsForDate(
   await ensureCurrentWeekMonthlyAppointments()
 
   try {
-    const supabase = await createClient()
+    // Availability depends on EVERY client's appointments, not just the
+    // caller's — RLS on `appointments` only lets a client SELECT their own
+    // rows (client_select_own_appt), so this must read with the service role
+    // or every other client's bookings are invisible here and their slots
+    // wrongly show as free. Nothing sensitive leaves this function: only
+    // start/end/available booleans and a block reason string are returned.
+    const supabase = createAdminClient()
 
     // Fetch service for duration
     const { data: service, error: serviceError } = await supabase
@@ -101,8 +106,6 @@ export async function bookAppointment(
       return { error: 'Você precisa estar logado para agendar.' }
     }
 
-    await ensureCurrentWeekMonthlyAppointments()
-
     if (!isDateInBookingWindow(input.date)) {
       return { error: 'Data fora do período de agendamento.' }
     }
@@ -119,7 +122,10 @@ export async function bookAppointment(
       return { error: 'Serviço não encontrado ou indisponível.' }
     }
 
-    // Revalidate the requested slot server-side (grid, blocks, lead time).
+    // Revalidate the requested slot server-side. This also materializes this
+    // week's monthly-client appointments and checks the grid/blocks/lead
+    // time against everyone's bookings (not just this client's, unlike the
+    // RLS-scoped queries below) — the authoritative pre-insert check.
     const slotCheck = await getAvailableSlotsForDate(input.date, input.service_id)
     const requested = slotCheck.slots?.find(
       (s) => s.start === input.start_time && s.available,
@@ -136,26 +142,16 @@ export async function bookAppointment(
     const endMinStr = (endTotalMin % 60).toString().padStart(2, '0')
     const end_time = `${endHour}:${endMinStr}`
 
-    // Check slot availability: any non-cancelled appointment that overlaps
-    const { data: conflicting } = await supabase
-      .from('appointments')
-      .select('id')
-      .eq('date', input.date)
-      .eq('status', 'scheduled')
-      .lt('start_time', end_time)
-      .gt('end_time', input.start_time)
-
-    if (conflicting && conflicting.length > 0) {
-      return { error: 'Horário não disponível. Escolha outro horário.' }
-    }
-
     // Generate cryptographically random access code
     const access_code = Array.from(
       crypto.getRandomValues(new Uint8Array(8)),
       (b) => 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'[b % 32]
     ).join('')
 
-    // Insert appointment
+    // Insert appointment. The exclusion constraint (appointments_no_overlap)
+    // is the final, authoritative guard against double-booking — it applies
+    // to every row in the table regardless of RLS, so it still catches a
+    // race even though the checks above are what surface a friendly error.
     const { data: newAppointment, error: insertError } = await supabase
       .from('appointments')
       .insert({
@@ -186,11 +182,6 @@ export async function bookAppointment(
       return { error: 'Erro ao agendar. Tente novamente.' }
     }
 
-    // Await calendar sync so it completes before the serverless function ends,
-    // but swallow errors so a calendar failure never blocks the booking.
-    // syncAppointmentEvent records its own sync_status/sync_error on the row.
-    await syncAppointmentEvent(newAppointment.id).catch(() => {})
-
     return { appointment: newAppointment as Appointment }
   } catch {
     return { error: 'Erro ao agendar. Tente novamente.' }
@@ -214,7 +205,7 @@ export async function cancelAppointment(
       .eq('id', appointmentId)
       .eq('client_id', authData.user.id)
       .eq('status', 'scheduled')
-      .select('id, google_event_id')
+      .select('id')
 
     if (error) {
       return { error: 'Erro ao cancelar agendamento.' }
@@ -222,19 +213,6 @@ export async function cancelAppointment(
 
     if (!data || data.length === 0) {
       return { error: 'Agendamento não encontrado ou já cancelado.' }
-    }
-
-    // Remove the event from Google Calendar. Await so it completes before the
-    // serverless function ends; swallow errors so a calendar failure never
-    // blocks the cancellation (the appointment is already canceled).
-    const googleEventId = data[0].google_event_id
-    if (googleEventId) {
-      await deleteCalendarEvent(googleEventId).catch(() => {})
-      await supabase
-        .from('appointments')
-        .update({ google_event_id: null, sync_status: 'pending', sync_error: null })
-        .eq('id', appointmentId)
-        .eq('client_id', authData.user.id)
     }
 
     return {}
@@ -272,10 +250,10 @@ export async function rescheduleAppointment(
     const duration = (appt.service as unknown as { duration_minutes: number } | null)?.duration_minutes
     if (!duration) return { error: 'Serviço inválido.' }
 
-    // Revalidate the requested slot server-side (grid, blocks, lead time).
-    // Note: slots overlapping the appointment being moved count as occupied,
-    // so moving into a slot that overlaps ITSELF is refused (rare; the client
-    // can cancel and rebook).
+    // Revalidate the requested slot server-side (grid, blocks, lead time,
+    // everyone's bookings). Note: slots overlapping the appointment being
+    // moved count as occupied, so moving into a slot that overlaps ITSELF is
+    // refused (rare; the client can cancel and rebook).
     const slotCheck = await getAvailableSlotsForDate(newDate, appt.service_id)
     const requested = slotCheck.slots?.find(
       (s) => s.start === newStartTime && s.available,
@@ -288,20 +266,6 @@ export async function rescheduleAppointment(
     const endTotal = h * 60 + m + duration
     const end_time = `${String(Math.floor(endTotal / 60)).padStart(2, '0')}:${String(endTotal % 60).padStart(2, '0')}`
 
-    // Slot must be free (ignoring this appointment itself).
-    const { data: conflicting } = await supabase
-      .from('appointments')
-      .select('id')
-      .eq('date', newDate)
-      .eq('status', 'scheduled')
-      .lt('start_time', end_time)
-      .gt('end_time', newStartTime)
-      .neq('id', appointmentId)
-
-    if (conflicting && conflicting.length > 0) {
-      return { error: 'Horário não disponível. Escolha outro horário.' }
-    }
-
     const { error } = await supabase
       .from('appointments')
       .update({ date: newDate, start_time: newStartTime, end_time })
@@ -309,10 +273,12 @@ export async function rescheduleAppointment(
       .eq('client_id', authData.user.id)
       .eq('status', 'scheduled')
 
-    if (error) return { error: 'Erro ao remarcar. Tente novamente.' }
-
-    // Keep the calendar event in sync with the new date/time.
-    await syncAppointmentEvent(appointmentId).catch(() => {})
+    if (error) {
+      if ((error as { code?: string }).code === '23P01') {
+        return { error: 'Horário não disponível. Escolha outro horário.' }
+      }
+      return { error: 'Erro ao remarcar. Tente novamente.' }
+    }
 
     return {}
   } catch {
